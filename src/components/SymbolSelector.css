@@ -1,0 +1,26 @@
+.symbol-selector select {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  outline: none;
+  font-family: inherit;
+}
+
+.symbol-selector select:hover {
+  border-color: var(--accent-blue);
+}
+
+.symbol-selector select:focus {
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.2);
+}
+
+.symbol-selector select option {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
