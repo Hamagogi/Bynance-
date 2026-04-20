@@ -1,16 +1,27 @@
-# React + Vite
+# ContentShift
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+AI content repurposing SaaS – paste one YouTube video, blog URL, or text and
+get five platform-native versions instantly.
 
-Currently, two official plugins are available:
+- Instagram caption + hashtags
+- X/Twitter thread (5–7 tweets)
+- LinkedIn post
+- YouTube Shorts script
+- Newsletter summary
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Stack
 
-## React Compiler
+Next.js 14 · Tailwind · Supabase · Anthropic Claude · Stripe · Vercel
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Quick start
 
-## Expanding the ESLint configuration
+```bash
+cp .env.example .env.local
+# fill in Supabase + Anthropic + Stripe keys
+npm install
+npm run dev
+```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Then run `supabase/schema.sql` in the Supabase SQL editor.
+
+See [`CLAUDE.md`](./CLAUDE.md) for architecture notes and environment variables.
