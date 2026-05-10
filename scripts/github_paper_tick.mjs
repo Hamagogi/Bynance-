@@ -56,7 +56,17 @@ const DEFAULT_SETTINGS = {
   trailPct: 0.35,
   stopSlipMult: 1.35,
   maxDailyLossPct: 2,
-  maxSameSidePositions: 2
+  maxSameSidePositions: 2,
+  requireMarketQuality: true,
+  minQuoteVolume: 50_000_000,
+  maxLiveSpreadPct: 0.08,
+  minTopBookUsdt: 1_500,
+  maxFundingRatePct: 0.08,
+  minReadinessDays: 30,
+  minReadinessTrades: 80,
+  readinessMinReturnPct: 2,
+  readinessMinPf: 1.3,
+  readinessMaxDdPct: 5
 };
 
 const now = Date.now();
@@ -80,14 +90,20 @@ async function main(){
   state.errors = [];
 
   const symbols = await readSymbols(state);
-  const market = await loadMarket(symbols, state.settings.intervals, state.settings.candleLimit, state.errors);
+  const quality = await loadMarketQuality(symbols, state.settings, state.errors);
+  state.marketQuality = summarizeMarketQuality(symbols, quality);
+  const openSymbols = state.positions.map(p => p.symbol).filter(Boolean);
+  const scanSymbols = symbols.filter(symbol => marketQualityPass(quality.get(symbol), state.settings));
+  const marketSymbols = [...new Set([...openSymbols, ...scanSymbols])];
+  const market = await loadMarket(marketSymbols, state.settings.intervals, state.settings.candleLimit, state.errors);
 
   updateOpenPositions(state, market);
-  openNewPositions(state, market);
+  openNewPositions(state, market, quality);
   markEquity(state);
 
   state.lastUpdated = new Date(now).toISOString();
   state.stats = makeStats(state);
+  state.readiness = makeReadiness(state);
   trimState(state);
   await writeOutputs(state);
 }
@@ -140,6 +156,16 @@ function readSettings(previous = {}){
     stopSlipMult: number(process.env.PAPER_STOP_SLIP_MULT, previous.stopSlipMult ?? DEFAULT_SETTINGS.stopSlipMult),
     maxDailyLossPct: number(process.env.PAPER_MAX_DAILY_LOSS_PCT, previous.maxDailyLossPct ?? DEFAULT_SETTINGS.maxDailyLossPct),
     maxSameSidePositions: Math.floor(number(process.env.PAPER_MAX_SAME_SIDE_POSITIONS, previous.maxSameSidePositions ?? DEFAULT_SETTINGS.maxSameSidePositions)),
+    requireMarketQuality: bool(process.env.PAPER_REQUIRE_MARKET_QUALITY, previous.requireMarketQuality ?? DEFAULT_SETTINGS.requireMarketQuality),
+    minQuoteVolume: number(process.env.PAPER_MIN_QUOTE_VOLUME, previous.minQuoteVolume ?? DEFAULT_SETTINGS.minQuoteVolume),
+    maxLiveSpreadPct: number(process.env.PAPER_MAX_LIVE_SPREAD_PCT, previous.maxLiveSpreadPct ?? DEFAULT_SETTINGS.maxLiveSpreadPct),
+    minTopBookUsdt: number(process.env.PAPER_MIN_TOP_BOOK_USDT, previous.minTopBookUsdt ?? DEFAULT_SETTINGS.minTopBookUsdt),
+    maxFundingRatePct: number(process.env.PAPER_MAX_FUNDING_RATE_PCT, previous.maxFundingRatePct ?? DEFAULT_SETTINGS.maxFundingRatePct),
+    minReadinessDays: number(process.env.PAPER_MIN_READINESS_DAYS, previous.minReadinessDays ?? DEFAULT_SETTINGS.minReadinessDays),
+    minReadinessTrades: Math.floor(number(process.env.PAPER_MIN_READINESS_TRADES, previous.minReadinessTrades ?? DEFAULT_SETTINGS.minReadinessTrades)),
+    readinessMinReturnPct: number(process.env.PAPER_READINESS_MIN_RETURN_PCT, previous.readinessMinReturnPct ?? DEFAULT_SETTINGS.readinessMinReturnPct),
+    readinessMinPf: number(process.env.PAPER_READINESS_MIN_PF, previous.readinessMinPf ?? DEFAULT_SETTINGS.readinessMinPf),
+    readinessMaxDdPct: number(process.env.PAPER_READINESS_MAX_DD_PCT, previous.readinessMaxDdPct ?? DEFAULT_SETTINGS.readinessMaxDdPct),
     intervals
   };
 }
@@ -168,6 +194,90 @@ async function loadQuoteVolumes(){
     if(row?.symbol) volumes.set(row.symbol, number(row.quoteVolume, 0));
   });
   return volumes;
+}
+
+async function loadMarketQuality(symbols, settings, errors){
+  const [volumeResult, bookResult, fundingResult] = await Promise.allSettled([
+    fetchJsonFromBases('/ticker/24hr'),
+    fetchJsonFromBases('/ticker/bookTicker'),
+    fetchJsonFromBases('/premiumIndex')
+  ]);
+  if(volumeResult.status === 'rejected') errors.push(`[quality] volume ${volumeResult.reason?.message || String(volumeResult.reason)}`);
+  if(bookResult.status === 'rejected') errors.push(`[quality] book ${bookResult.reason?.message || String(bookResult.reason)}`);
+  if(fundingResult.status === 'rejected') errors.push(`[quality] funding ${fundingResult.reason?.message || String(fundingResult.reason)}`);
+
+  const volumes = new Map();
+  const books = new Map();
+  const funding = new Map();
+
+  if(Array.isArray(volumeResult.value)){
+    volumeResult.value.forEach(row => {
+      if(row?.symbol) volumes.set(row.symbol, number(row.quoteVolume, 0));
+    });
+  }
+  if(Array.isArray(bookResult.value)){
+    bookResult.value.forEach(row => {
+      if(row?.symbol) books.set(row.symbol, row);
+    });
+  }
+  const fundingRows = Array.isArray(fundingResult.value) ? fundingResult.value : (fundingResult.value ? [fundingResult.value] : []);
+  fundingRows.forEach(row => {
+    if(row?.symbol) funding.set(row.symbol, number(row.lastFundingRate, 0) * 100);
+  });
+
+  const out = new Map();
+  for(const symbol of symbols){
+    const book = books.get(symbol);
+    const bid = number(book?.bidPrice, 0);
+    const ask = number(book?.askPrice, 0);
+    const mid = bid > 0 && ask > 0 ? (bid + ask) / 2 : 0;
+    const spreadPct = mid > 0 ? (ask - bid) / mid * 100 : Infinity;
+    const bidDepth = bid * number(book?.bidQty, 0);
+    const askDepth = ask * number(book?.askQty, 0);
+    const topBookDepthUsdt = Math.min(bidDepth || 0, askDepth || 0);
+    const quoteVolume = volumes.get(symbol) || 0;
+    const fundingRatePct = funding.get(symbol) ?? 0;
+    const reasons = [];
+    if(!quoteVolume) reasons.push('24시간 거래대금 없음');
+    else if(quoteVolume < settings.minQuoteVolume) reasons.push(`24시간 거래대금 ${formatCompact(quoteVolume)} < ${formatCompact(settings.minQuoteVolume)}`);
+    if(!Number.isFinite(spreadPct)) reasons.push('호가 스프레드 없음');
+    else if(spreadPct > settings.maxLiveSpreadPct) reasons.push(`스프레드 ${spreadPct.toFixed(3)}% > ${settings.maxLiveSpreadPct}%`);
+    if(topBookDepthUsdt < settings.minTopBookUsdt) reasons.push(`최우선 호가 깊이 ${formatCompact(topBookDepthUsdt)} < ${formatCompact(settings.minTopBookUsdt)}`);
+    if(Math.abs(fundingRatePct) > settings.maxFundingRatePct) reasons.push(`펀딩 ${fundingRatePct.toFixed(4)}% > ±${settings.maxFundingRatePct}%`);
+
+    out.set(symbol, {
+      symbol,
+      quoteVolume: round(quoteVolume, 2),
+      spreadPct: finiteRound(spreadPct, 5),
+      topBookDepthUsdt: round(topBookDepthUsdt, 2),
+      fundingRatePct: round(fundingRatePct, 5),
+      passed: reasons.length === 0,
+      reasons
+    });
+  }
+  return out;
+}
+
+function marketQualityPass(quality, settings){
+  if(!settings.requireMarketQuality) return true;
+  return !!quality?.passed;
+}
+
+function summarizeMarketQuality(symbols, quality){
+  const rows = symbols.map(symbol => quality.get(symbol)).filter(Boolean);
+  const passed = rows.filter(x => x.passed).length;
+  const rejected = rows.length - passed;
+  const watched = rows
+    .slice()
+    .sort((a,b) => Number(b.passed) - Number(a.passed) || b.quoteVolume - a.quoteVolume)
+    .slice(0, 80);
+  return {
+    total: rows.length,
+    passed,
+    rejected,
+    updatedAt: new Date(now).toISOString(),
+    watched
+  };
 }
 
 async function fetchJsonFromBases(pathname){
@@ -243,6 +353,9 @@ function normalizeState(input){
     journal: Array.isArray(s.journal) ? s.journal : [],
     equity: Array.isArray(s.equity) && s.equity.length ? s.equity : [{ time: now, value: initial }],
     stats: s.stats || {},
+    readiness: s.readiness || null,
+    marketQuality: s.marketQuality || null,
+    guardEvents: Array.isArray(s.guardEvents) ? s.guardEvents : [],
     errors: Array.isArray(s.errors) ? s.errors.slice(0, 12) : [],
     lastUpdated: s.lastUpdated || null
   };
@@ -349,10 +462,10 @@ function bestCandlesForPosition(market, pos){
   return market.get(pos.symbol)?.get(pos.interval || '5m') || [...(market.get(pos.symbol)?.values() || [])][0] || [];
 }
 
-function openNewPositions(state, market){
+function openNewPositions(state, market, quality){
   const settings = state.settings;
   if(equityNow(state) <= state.initial * (1 - settings.maxDailyLossPct / 100)){
-    state.errors.unshift(`[risk] daily loss guard: equity below -${settings.maxDailyLossPct}%`);
+    recordGuard(state, 'daily-loss', `[risk] daily loss guard: equity below -${settings.maxDailyLossPct}%`);
     return;
   }
   const openSymbols = new Set(state.positions.map(p => p.symbol));
@@ -362,9 +475,11 @@ function openNewPositions(state, market){
   const candidates = [];
   for(const [symbol, intervals] of market.entries()){
     if(openSymbols.has(symbol)) continue;
+    const q = quality?.get(symbol);
+    if(!marketQualityPass(q, settings)) continue;
     let best = null;
     for(const [interval, candles] of intervals.entries()){
-      const signal = scoreSignal(symbol, interval, candles, settings);
+      const signal = scoreSignal(symbol, interval, candles, settings, q);
       if(signal && (!best || signal.score > best.score)) best = signal;
     }
     if(best && best.score >= settings.minScore) candidates.push(best);
@@ -378,7 +493,7 @@ function openNewPositions(state, market){
   }
 }
 
-function scoreSignal(symbol, interval, candles, settings){
+function scoreSignal(symbol, interval, candles, settings, quality){
   const c = closedCandles(candles);
   const warm = Math.max(settings.slow + 2, settings.vwapLen + 2, settings.breakout + 2, 80);
   if(c.length < warm + 2) return null;
@@ -387,7 +502,9 @@ function scoreSignal(symbol, interval, candles, settings){
   const side = entryDirection(c, ind, i, settings);
   if(!side) return null;
   const last = c.at(-1);
-  const score = signalScore(c, ind, i, settings, side);
+  const qualityPenalty = quality ? Math.min(1.8, Math.max(0, quality.spreadPct || 0) * 5 + Math.abs(quality.fundingRatePct || 0) * 2) : 0;
+  const liquidityBonus = quality?.quoteVolume ? Math.min(.7, Math.log10(Math.max(1, quality.quoteVolume)) / 16) : 0;
+  const score = signalScore(c, ind, i, settings, side) + liquidityBonus - qualityPenalty;
   if(score < settings.minScore) return null;
   const entry = last.close;
   const tp = side === 'LONG' ? entry * (1 + settings.tpPct / 100) : entry * (1 - settings.tpPct / 100);
@@ -404,6 +521,7 @@ function scoreSignal(symbol, interval, candles, settings){
     tp,
     sl,
     trailPct: settings.trailPct,
+    quality,
     reason: `${interval} shared-strategy score ${score.toFixed(2)}`
   };
 }
@@ -435,7 +553,10 @@ function openPosition(state, signal){
     marginReserved: true,
     trailPct: settings.trailPct,
     strategy: 'Shared EMA/VWAP/ATR',
-    reason: signal.reason
+    quality: signal.quality ? compactQuality(signal.quality) : null,
+    reason: signal.quality
+      ? `${signal.reason} · spread ${fmtPctValue(signal.quality.spreadPct)} funding ${fmtPctValue(signal.quality.fundingRatePct)}`
+      : signal.reason
   };
   state.cash = Math.max(0, state.cash - margin);
   state.positions.push(pos);
@@ -499,6 +620,8 @@ function makeStats(state){
   const losses = closed.filter(x => x.pnl < 0);
   const grossWin = wins.reduce((s,x) => s + x.pnl, 0);
   const grossLoss = Math.abs(losses.reduce((s,x) => s + x.pnl, 0));
+  const firstEquityTime = Number(state.equity[0]?.time) || now;
+  const ageDays = Math.max(0, (now - firstEquityTime) / 86400000);
   return {
     returnPct: (equityNow(state) / state.initial - 1) * 100,
     closedTrades: closed.length,
@@ -507,8 +630,84 @@ function makeStats(state){
     winRate: closed.length ? wins.length / closed.length * 100 : 0,
     profitFactor: grossLoss ? grossWin / grossLoss : grossWin ? 99 : 0,
     maxDrawdownPct: maxDrawdown(state.equity.map(x => x.value)),
+    liquidations: closed.filter(x => x.reason === 'LIQ').length,
+    lossGuardHits: state.guardEvents.filter(x => x.type === 'daily-loss').length,
+    ageDays,
     updatedAt: state.lastUpdated
   };
+}
+
+function makeReadiness(state){
+  const settings = state.settings;
+  const stats = state.stats || makeStats(state);
+  const quality = state.marketQuality || { total: 0, passed: 0 };
+  const criteria = [
+    {
+      key: 'paperDays',
+      label: `${settings.minReadinessDays}일 이상 모의운용`,
+      value: `${stats.ageDays.toFixed(1)}일`,
+      pass: stats.ageDays >= settings.minReadinessDays
+    },
+    {
+      key: 'closedTrades',
+      label: `${settings.minReadinessTrades}회 이상 종료 거래`,
+      value: `${stats.closedTrades}회`,
+      pass: stats.closedTrades >= settings.minReadinessTrades
+    },
+    {
+      key: 'returnPct',
+      label: `순수익 ${settings.readinessMinReturnPct}% 이상`,
+      value: `${stats.returnPct.toFixed(2)}%`,
+      pass: stats.returnPct >= settings.readinessMinReturnPct
+    },
+    {
+      key: 'profitFactor',
+      label: `수익 팩터 ${settings.readinessMinPf} 이상`,
+      value: Number(stats.profitFactor || 0).toFixed(2),
+      pass: stats.profitFactor >= settings.readinessMinPf
+    },
+    {
+      key: 'drawdown',
+      label: `최대 낙폭 ${settings.readinessMaxDdPct}% 이하`,
+      value: `${stats.maxDrawdownPct.toFixed(2)}%`,
+      pass: stats.maxDrawdownPct <= settings.readinessMaxDdPct
+    },
+    {
+      key: 'liquidations',
+      label: '강제 청산 0회',
+      value: `${stats.liquidations || 0}회`,
+      pass: (stats.liquidations || 0) === 0
+    },
+    {
+      key: 'lossGuard',
+      label: '일일 손실 제한 미발동',
+      value: `${stats.lossGuardHits || 0}회`,
+      pass: (stats.lossGuardHits || 0) === 0
+    },
+    {
+      key: 'marketQuality',
+      label: '감시 종목 시장 품질 필터 통과',
+      value: `${quality.passed || 0}/${quality.total || 0}`,
+      pass: (quality.total || 0) > 0 && (quality.passed || 0) >= Math.min(12, Math.max(3, Math.ceil((quality.total || 0) * .08)))
+    }
+  ];
+  const passed = criteria.filter(x => x.pass).length;
+  const status = passed === criteria.length ? 'TESTNET_READY' : 'NOT_READY';
+  return {
+    status,
+    score: Math.round(passed / criteria.length * 100),
+    passed,
+    total: criteria.length,
+    message: status === 'TESTNET_READY'
+      ? '실자금이 아니라 테스트넷 또는 극소액 체결 검증 단계로만 진행 가능합니다.'
+      : '실자금 투입 금지: 장기 모의운용 기준을 아직 통과하지 못했습니다.',
+    criteria
+  };
+}
+
+function recordGuard(state, type, message){
+  state.errors.unshift(message);
+  state.guardEvents.unshift({ time: now, type, message });
 }
 
 function maxDrawdown(values){
@@ -645,6 +844,9 @@ function toPaper(state){
     journal: state.journal,
     equity: state.equity.map(x => ({ time: x.time, value: round(x.value) })),
     stats: state.stats,
+    readiness: state.readiness,
+    marketQuality: state.marketQuality,
+    guardEvents: state.guardEvents,
     errors: state.errors
   };
 }
@@ -653,6 +855,7 @@ function trimState(state){
   state.positions = state.positions.slice(0, state.settings.maxPositions);
   state.journal = state.journal.slice(0, 240);
   state.equity = state.equity.slice(-1200);
+  state.guardEvents = state.guardEvents.slice(0, 120);
   state.errors = state.errors.slice(0, 20);
 }
 
@@ -734,6 +937,19 @@ function fundingCostPct(entryTime, exitTime, settings){
   return hours / 8 * Math.max(0, number(settings.funding8hPct, 0));
 }
 function liquidationAdversePct(leverage){ return Math.max(.05, 100 / Math.max(1, leverage) - .85); }
+
+function compactQuality(quality){
+  return {
+    quoteVolume: round(quality.quoteVolume, 2),
+    spreadPct: finiteRound(quality.spreadPct, 5),
+    topBookDepthUsdt: round(quality.topBookDepthUsdt, 2),
+    fundingRatePct: round(quality.fundingRatePct, 5)
+  };
+}
+
+function fmtPctValue(value){
+  return Number.isFinite(Number(value)) ? `${Number(value).toFixed(4)}%` : '-';
+}
 
 function markRetPct(entry, price, side){
   const raw = (price / entry - 1) * 100;
@@ -831,9 +1047,30 @@ function number(value, fallback){
   return Number.isFinite(n) ? n : fallback;
 }
 
+function bool(value, fallback){
+  if(value === undefined || value === null || value === '') return !!fallback;
+  if(typeof value === 'boolean') return value;
+  return /^(1|true|yes|on)$/i.test(String(value));
+}
+
 function round(value, digits = 6){
   const n = Number(value);
   if(!Number.isFinite(n)) return 0;
   const m = 10 ** digits;
   return Math.round(n * m) / m;
+}
+
+function finiteRound(value, digits = 6){
+  const n = Number(value);
+  if(!Number.isFinite(n)) return null;
+  return round(n, digits);
+}
+
+function formatCompact(value){
+  const n = Number(value);
+  if(!Number.isFinite(n)) return '-';
+  if(Math.abs(n) >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`;
+  if(Math.abs(n) >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if(Math.abs(n) >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return n.toFixed(0);
 }

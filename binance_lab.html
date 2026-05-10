@@ -914,6 +914,20 @@
             </div>
           </div>
         </section>
+
+        <section class="side-section">
+          <div class="side-title"><span>실운용 품질</span><i data-lucide="shield-check"></i></div>
+          <div class="side-body">
+            <div class="grid-2">
+              <label>최소 24시간 거래대금<input id="minQuoteVolume" type="number" min="0" value="50000000" /></label>
+              <label>최대 실시간 스프레드 %<input id="maxLiveSpreadPct" type="number" step="0.01" value="0.08" /></label>
+            </div>
+            <div class="grid-2">
+              <label>최소 최우선 호가 깊이<input id="minTopBookUsdt" type="number" min="0" value="1500" /></label>
+              <label>최대 펀딩비 %<input id="maxFundingRatePct" type="number" step="0.01" value="0.08" /></label>
+            </div>
+          </div>
+        </section>
       </aside>
 
       <section class="workspace">
@@ -1067,6 +1081,13 @@
               </div>
               <aside>
                 <div class="band">
+                  <div class="band-head"><div class="band-title"><i data-lucide="shield-check"></i>실운용 준비도</div></div>
+                  <div class="band-body">
+                    <div class="selected-box" id="readinessBox"></div>
+                    <div class="selected-box" id="marketQualityBox" style="margin-top:12px"></div>
+                  </div>
+                </div>
+                <div class="band">
                   <div class="band-head"><div class="band-title"><i data-lucide="settings-2"></i>모의 조건</div></div>
                   <div class="band-body">
                     <div class="grid-2">
@@ -1187,6 +1208,10 @@
       slippage:'슬리피지는 주문하려던 가격과 실제 체결 가격의 차이입니다. 시장가 주문이나 급변 구간에서는 이 차이가 커질 수 있습니다.',
       stopSlip:'손절 슬립 배수는 손절 주문이 급하게 체결될 때 일반 슬리피지보다 더 불리하게 잡는 보수적 가정입니다.',
       liqBuffer:'청산 버퍼는 손절가와 예상 강제 청산가 사이의 안전거리입니다. 버퍼가 작으면 손절 전에 청산될 위험이 커집니다.',
+      minQuoteVolume:'최소 24시간 거래대금은 하루 동안 그 코인이 USDT 기준으로 얼마나 거래됐는지의 하한입니다. 값이 낮은 코인은 체결이 나쁘고 급변 시 빠져나오기 어렵습니다.',
+      maxLiveSpread:'최대 실시간 스프레드는 현재 최우선 매수 호가와 매도 호가의 차이를 제한합니다. 스프레드가 넓으면 진입하는 순간 불리한 가격에서 시작합니다.',
+      minTopBook:'최소 최우선 호가 깊이는 현재 가장 가까운 매수/매도 호가에 쌓인 금액의 하한입니다. 깊이가 얕으면 작은 주문도 가격을 밀 수 있습니다.',
+      maxFunding:'최대 펀딩비는 무기한 선물 보유 비용의 상한입니다. 펀딩비가 불리하게 크면 수익 전략도 비용 때문에 망가질 수 있습니다.',
       mdd:'최대 낙폭(MDD)은 계좌가 최고점에서 최저점까지 가장 크게 빠진 비율입니다. 전략을 버티기 쉬운지 보는 핵심 위험 지표입니다.',
       pf:'수익 팩터(PF)는 총이익을 총손실로 나눈 값입니다. 1보다 크면 이익 합계가 손실 합계보다 크고, 높을수록 손익 균형이 좋습니다.',
       trades:'거래 수는 백테스트 기간에 실제 진입과 청산이 발생한 횟수입니다. 너무 적으면 결과가 우연일 가능성이 큽니다.',
@@ -1323,6 +1348,10 @@
         maxHold:['최대 보유봉','maxHold'],
         feePct:['수수료 %','fee'],
         slipPct:['슬리피지 %','slippage'],
+        minQuoteVolume:['최소 24시간 거래대금','minQuoteVolume'],
+        maxLiveSpreadPct:['최대 실시간 스프레드 %','maxLiveSpread'],
+        minTopBookUsdt:['최소 최우선 호가 깊이','minTopBook'],
+        maxFundingRatePct:['최대 펀딩비 %','maxFunding'],
         stopSlipMult:['손절 슬립 배수','stopSlip'],
         liqBuffer:['최소 청산 버퍼','liqBuffer'],
         maxDd:['최대 낙폭(MDD)','mdd'],
@@ -1634,6 +1663,10 @@
         slipPct: number(els.slipPct.value, .02),
         spreadPct: number(els.spreadPct.value, .04),
         funding8hPct: number(els.funding8hPct.value, .01),
+        minQuoteVolume: number(els.minQuoteVolume.value, 50000000),
+        maxLiveSpreadPct: number(els.maxLiveSpreadPct.value, .08),
+        minTopBookUsdt: number(els.minTopBookUsdt.value, 1500),
+        maxFundingRatePct: number(els.maxFundingRatePct.value, .08),
         stopSlipMult: number(els.stopSlipMult.value, 1.35),
         minLiqBuffer: number(els.liqBuffer.value, .45),
         maxDd: number(els.maxDd.value, 35),
@@ -1655,7 +1688,7 @@
       const ids = [
         'presetSelect','symbolsInput','intervalSelect','candleCount','dataMode','modeSelect','sideSelect','gridSelect','comboLimit',
         'fastEma','slowEma','pulse','vwapLen','breakoutLen','minAtr','maxAtr','cooldown','leverages','marginPct','capital',
-        'maxPosition','tpPct','slPct','trailPct','maxHold','feePct','slipPct','spreadPct','funding8hPct','stopSlipMult','liqBuffer','maxDd','minPf',
+        'maxPosition','tpPct','slPct','trailPct','maxHold','feePct','slipPct','spreadPct','funding8hPct','minQuoteVolume','maxLiveSpreadPct','minTopBookUsdt','maxFundingRatePct','stopSlipMult','liqBuffer','maxDd','minPf',
         'minTrades','rejectLiq','mtmDd','saveJournal','paperTickSec','paperMaxOpen','paperSource','paperUniverse',
         'paperAutoClose','paperNoDuplicate'
       ];
@@ -3023,6 +3056,7 @@
         ? (state.serverPaper.readOnly ? '깃허브 자동 실행' : '서버 모드')
         : (state.paper.running ? '브라우저 모드' : '정지');
       setMetric('pState', state.paper.running ? 'ON' : 'OFF', paperMode, state.paper.running ? 'green' : 'red');
+      renderReadiness();
       els.positionBody.innerHTML = state.paper.positions.map(p => {
         const ret = markRetPct(p.entry, p.mark, p.side) - number(els.feePct?.value, .08);
         const pnl = p.order * ret / 100;
@@ -3039,6 +3073,95 @@
         </div>
       `).join('');
       drawLine(els.paperCanvas, state.paper.equity.map(x => x.value), {label:'모의 자산', color:'#25bfd1', fill:true});
+    }
+
+    function renderReadiness(){
+      if(!els.readinessBox || !els.marketQualityBox) return;
+      const readiness = state.paper.readiness || localReadiness();
+      const statusText = readiness.status === 'TESTNET_READY' ? '테스트넷 검증 가능' : '실자금 금지';
+      const statusClass = readiness.status === 'TESTNET_READY' ? 'amber' : 'red';
+      const criteria = Array.isArray(readiness.criteria) ? readiness.criteria : [];
+      const rows = [
+        ['판정', `<span class="${statusClass}">${statusText}</span>`],
+        ['준비도 점수', `${readiness.score || 0}% (${readiness.passed || 0}/${readiness.total || criteria.length || 0})`],
+        ['메시지', readiness.message || '장기 모의운용 데이터가 부족합니다.']
+      ];
+      els.readinessBox.innerHTML = rows.map(([a,b]) => `<div class="line-item"><span>${a}</span><span>${b}</span></div>`).join('') +
+        criteria.slice(0, 8).map(item => `
+          <div class="line-item">
+            <span>${escapeHtml(item.label || item.key)}</span>
+            <span class="${item.pass ? 'green' : 'red'}">${escapeHtml(String(item.value ?? '-'))}</span>
+          </div>
+        `).join('');
+
+      const mq = state.paper.marketQuality;
+      if(!mq){
+        els.marketQualityBox.innerHTML = '<div class="line-item"><span>시장 품질</span><span>깃허브 모의투자 연결 후 표시</span></div>';
+        return;
+      }
+      const watched = Array.isArray(mq.watched) ? mq.watched.slice(0, 6) : [];
+      els.marketQualityBox.innerHTML = [
+        ['시장 품질 통과', `${mq.passed || 0}/${mq.total || 0}`],
+        ['차단 종목', `${mq.rejected || 0}`]
+      ].map(([a,b]) => `<div class="line-item"><span>${a}</span><span>${b}</span></div>`).join('') +
+        watched.map(row => `
+          <div class="line-item">
+            <span>${escapeHtml(row.symbol)} ${row.passed ? '통과' : '차단'}</span>
+            <span>${formatQuality(row)}</span>
+          </div>
+        `).join('');
+    }
+
+    function localReadiness(){
+      const eq = equityNow();
+      const closed = state.paper.journal.filter(j => j.action === 'CLOSE');
+      const wins = closed.filter(j => j.pnl >= 0);
+      const losses = closed.filter(j => j.pnl < 0);
+      const grossWin = wins.reduce((sum,j) => sum + number(j.pnl, 0), 0);
+      const grossLoss = Math.abs(losses.reduce((sum,j) => sum + number(j.pnl, 0), 0));
+      const values = state.paper.equity.map(x => x.value);
+      const stats = {
+        returnPct:(eq/state.paper.initial-1)*100,
+        closedTrades:closed.length,
+        profitFactor:grossLoss ? grossWin/grossLoss : grossWin ? 99 : 0,
+        maxDrawdownPct:maxDrawdown(values),
+        liquidations:closed.filter(j => j.reason === 'LIQ').length,
+        lossGuardHits:0,
+        ageDays:values.length > 1 ? (Date.now() - (state.paper.equity[0]?.time || Date.now())) / 86400000 : 0
+      };
+      const criteria = [
+        {label:'30일 이상 모의운용', value:`${stats.ageDays.toFixed(1)}일`, pass:stats.ageDays >= 30},
+        {label:'80회 이상 종료 거래', value:`${stats.closedTrades}회`, pass:stats.closedTrades >= 80},
+        {label:'순수익 +2% 이상', value:fmtPct(stats.returnPct), pass:stats.returnPct >= 2},
+        {label:'수익 팩터 1.3 이상', value:stats.profitFactor.toFixed(2), pass:stats.profitFactor >= 1.3},
+        {label:'최대 낙폭 5% 이하', value:fmtPct(-stats.maxDrawdownPct).replace('-', ''), pass:stats.maxDrawdownPct <= 5},
+        {label:'강제 청산 0회', value:`${stats.liquidations}회`, pass:stats.liquidations === 0}
+      ];
+      const passed = criteria.filter(x => x.pass).length;
+      return {
+        status:'NOT_READY',
+        score:Math.round(passed / criteria.length * 100),
+        passed,
+        total:criteria.length,
+        message:'브라우저 모드는 실운용 판정용 데이터가 부족합니다. GitHub 자동 모의투자를 30~60일 이상 확인하세요.',
+        criteria
+      };
+    }
+
+    function maxDrawdown(values){
+      let peak = values[0] || 0;
+      let dd = 0;
+      values.forEach(value => {
+        peak = Math.max(peak, value);
+        if(peak > 0) dd = Math.max(dd, (peak - value) / peak * 100);
+      });
+      return dd;
+    }
+
+    function formatQuality(row){
+      const spread = row.spreadPct == null ? '-' : `${Number(row.spreadPct).toFixed(3)}%`;
+      const funding = row.fundingRatePct == null ? '-' : `${Number(row.fundingRatePct).toFixed(4)}%`;
+      return `${spread} / ${funding}`;
     }
 
     function persistPaper(){
@@ -3161,6 +3284,16 @@
       top.forEach((r,i) => {
         lines.push(`${i+1}. ${r.symbol} ${sideName(r.side)} ${r.leverage}x ${strategyName(r.params)} · 검증 ${fmtPct(r.test.returnPct)} · 최종 ${fmtPct(r.final.returnPct)} · 최대 낙폭 ${r.all.maxDd.toFixed(2)}% · 수익 팩터 ${r.all.pf.toFixed(2)}`);
       });
+      if(state.paper.readiness){
+        lines.push('');
+        lines.push('## 실운용 준비도');
+        lines.push(`- 판정: ${state.paper.readiness.status === 'TESTNET_READY' ? '테스트넷 검증 가능' : '실자금 금지'}`);
+        lines.push(`- 점수: ${state.paper.readiness.score}% (${state.paper.readiness.passed}/${state.paper.readiness.total})`);
+        lines.push(`- 메시지: ${state.paper.readiness.message}`);
+        (state.paper.readiness.criteria || []).forEach(item => {
+          lines.push(`- ${item.pass ? '통과' : '미달'}: ${item.label} (${item.value})`);
+        });
+      }
       lines.push('');
       lines.push('## 판단');
       lines.push(best ? judgement(best) : '아직 백테스트 결과가 없습니다.');
