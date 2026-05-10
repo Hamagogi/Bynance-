@@ -204,7 +204,6 @@ async function loadMarketQuality(symbols, settings, errors){
   ]);
   if(volumeResult.status === 'rejected') errors.push(`[quality] volume ${volumeResult.reason?.message || String(volumeResult.reason)}`);
   if(bookResult.status === 'rejected') errors.push(`[quality] book ${bookResult.reason?.message || String(bookResult.reason)}`);
-  if(fundingResult.status === 'rejected') errors.push(`[quality] funding ${fundingResult.reason?.message || String(fundingResult.reason)}`);
 
   const volumes = new Map();
   const books = new Map();
@@ -221,6 +220,7 @@ async function loadMarketQuality(symbols, settings, errors){
     });
   }
   const fundingRows = Array.isArray(fundingResult.value) ? fundingResult.value : (fundingResult.value ? [fundingResult.value] : []);
+  const fundingAvailable = fundingResult.status === 'fulfilled' && fundingRows.length > 0;
   fundingRows.forEach(row => {
     if(row?.symbol) funding.set(row.symbol, number(row.lastFundingRate, 0) * 100);
   });
@@ -243,7 +243,8 @@ async function loadMarketQuality(symbols, settings, errors){
     if(!Number.isFinite(spreadPct)) reasons.push('호가 스프레드 없음');
     else if(spreadPct > settings.maxLiveSpreadPct) reasons.push(`스프레드 ${spreadPct.toFixed(3)}% > ${settings.maxLiveSpreadPct}%`);
     if(topBookDepthUsdt < settings.minTopBookUsdt) reasons.push(`최우선 호가 깊이 ${formatCompact(topBookDepthUsdt)} < ${formatCompact(settings.minTopBookUsdt)}`);
-    if(Math.abs(fundingRatePct) > settings.maxFundingRatePct) reasons.push(`펀딩 ${fundingRatePct.toFixed(4)}% > ±${settings.maxFundingRatePct}%`);
+    if(!fundingAvailable) reasons.push('펀딩 데이터 없음');
+    else if(Math.abs(fundingRatePct) > settings.maxFundingRatePct) reasons.push(`펀딩 ${fundingRatePct.toFixed(4)}% > ±${settings.maxFundingRatePct}%`);
 
     out.set(symbol, {
       symbol,
@@ -276,6 +277,7 @@ function summarizeMarketQuality(symbols, quality){
     passed,
     rejected,
     updatedAt: new Date(now).toISOString(),
+    warnings: rows.some(x => x.reasons.includes('펀딩 데이터 없음')) ? ['펀딩 데이터를 확인할 수 없어 신규 진입을 차단했습니다.'] : [],
     watched
   };
 }
@@ -683,6 +685,12 @@ function makeReadiness(state){
       label: '일일 손실 제한 미발동',
       value: `${stats.lossGuardHits || 0}회`,
       pass: (stats.lossGuardHits || 0) === 0
+    },
+    {
+      key: 'operationalErrors',
+      label: '운영 오류 0건',
+      value: `${state.errors.length}건`,
+      pass: state.errors.length === 0
     },
     {
       key: 'marketQuality',

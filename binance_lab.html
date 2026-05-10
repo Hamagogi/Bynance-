@@ -3102,7 +3102,8 @@
       const watched = Array.isArray(mq.watched) ? mq.watched.slice(0, 6) : [];
       els.marketQualityBox.innerHTML = [
         ['시장 품질 통과', `${mq.passed || 0}/${mq.total || 0}`],
-        ['차단 종목', `${mq.rejected || 0}`]
+        ['차단 종목', `${mq.rejected || 0}`],
+        ['품질 경고', (mq.warnings || []).join(' / ') || '-']
       ].map(([a,b]) => `<div class="line-item"><span>${a}</span><span>${b}</span></div>`).join('') +
         watched.map(row => `
           <div class="line-item">
@@ -3161,7 +3162,8 @@
     function formatQuality(row){
       const spread = row.spreadPct == null ? '-' : `${Number(row.spreadPct).toFixed(3)}%`;
       const funding = row.fundingRatePct == null ? '-' : `${Number(row.fundingRatePct).toFixed(4)}%`;
-      return `${spread} / ${funding}`;
+      const reason = row.passed ? '' : ` · ${escapeHtml((row.reasons || [])[0] || '품질 미달')}`;
+      return `${spread} / ${funding}${reason}`;
     }
 
     function persistPaper(){
