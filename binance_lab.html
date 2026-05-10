@@ -342,6 +342,74 @@
       overflow:hidden;
       text-overflow:ellipsis;
     }
+    .term-label{
+      display:inline-flex;
+      align-items:center;
+      gap:5px;
+      min-width:0;
+      vertical-align:middle;
+    }
+    .help-tip{
+      position:relative;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      width:16px;
+      height:16px;
+      flex:0 0 16px;
+      border:1px solid rgba(240,185,11,.42);
+      border-radius:50%;
+      background:rgba(240,185,11,.1);
+      color:var(--amber);
+      font-size:11px;
+      font-weight:950;
+      line-height:1;
+      cursor:help;
+      outline:none;
+      z-index:3;
+    }
+    .help-tip::before{content:"!"}
+    .help-tip::after{
+      content:attr(data-help);
+      position:absolute;
+      left:50%;
+      bottom:calc(100% + 9px);
+      width:min(280px,70vw);
+      transform:translateX(-50%) translateY(4px);
+      padding:10px 12px;
+      border:1px solid var(--line2);
+      border-radius:8px;
+      background:#10191d;
+      color:#e8f1ee;
+      box-shadow:var(--shadow);
+      font-size:12px;
+      font-weight:650;
+      line-height:1.45;
+      white-space:normal;
+      text-align:left;
+      opacity:0;
+      pointer-events:none;
+      transition:.12s ease;
+      z-index:80;
+    }
+    .help-tip:hover::after,
+    .help-tip:focus-visible::after{
+      opacity:1;
+      transform:translateX(-50%) translateY(0);
+    }
+    .metric .k{
+      display:flex;
+      align-items:center;
+      gap:5px;
+      min-width:0;
+    }
+    th .term-label{
+      justify-content:flex-end;
+      width:100%;
+    }
+    th:first-child .term-label,
+    th:nth-child(2) .term-label,
+    th:nth-child(5) .term-label{justify-content:flex-start}
     .green{color:var(--green)}
     .red{color:var(--red)}
     .amber{color:var(--amber)}
@@ -635,8 +703,8 @@
             </label>
             <div class="chip-row" id="symbolChips"></div>
             <div class="market-scope">
-              <div class="candidate-top"><span>All Binance USDT markets</span><span class="pill ok">AUTO</span></div>
-              <div class="candidate-sub">Coin selection is disabled. Every run scans the full Binance USDT market universe automatically.</div>
+              <div class="candidate-top"><span>바이낸스 USDT 전체 마켓</span><span class="pill ok">자동</span></div>
+              <div class="candidate-sub">코인 선택 없이 모든 바이낸스 USDT 무기한 종목을 자동으로 스캔합니다.</div>
             </div>
             <input id="symbolsInput" type="hidden" value="ALL_BINANCE_USDT" />
             <div class="grid-2">
@@ -678,18 +746,18 @@
               <label>전략
                 <select id="modeSelect">
                   <option value="auto" selected>자동 최적</option>
-                  <option value="pullback">Pullback</option>
-                  <option value="impulse">Impulse</option>
-                  <option value="reclaim">VWAP Reclaim</option>
-                  <option value="breakout">Breakout</option>
-                  <option value="hybrid">Hybrid</option>
+                  <option value="pullback">눌림목</option>
+                  <option value="impulse">추세 돌파</option>
+                  <option value="reclaim">평균가 회복</option>
+                  <option value="breakout">고점/저점 돌파</option>
+                  <option value="hybrid">혼합</option>
                 </select>
               </label>
               <label>방향
                 <select id="sideSelect">
-                  <option value="BOTH" selected>LONG + SHORT</option>
-                  <option value="LONG">LONG</option>
-                  <option value="SHORT">SHORT</option>
+                  <option value="BOTH" selected>양방향</option>
+                  <option value="LONG">롱</option>
+                  <option value="SHORT">숏</option>
                 </select>
               </label>
             </div>
@@ -846,8 +914,8 @@
                       <table>
                         <thead>
                           <tr>
-                            <th>#</th><th>코인</th><th>분봉</th><th>방향</th><th>전략</th><th>Lev</th>
-                            <th>All</th><th>Test</th><th>MDD</th><th>거래</th><th>승률</th><th>PF</th><th>청산</th><th>점수</th>
+                            <th>#</th><th>코인</th><th>분봉</th><th>방향</th><th>전략</th><th>레버리지</th>
+                            <th>전체 수익률</th><th>검증 수익률</th><th>최대 낙폭</th><th>거래</th><th>승률</th><th>수익 팩터</th><th>청산</th><th>점수</th>
                           </tr>
                         </thead>
                         <tbody id="resultBody"></tbody>
@@ -904,7 +972,7 @@
                     <div class="table-wrap">
                       <table>
                         <thead>
-                          <tr><th>코인</th><th>방향</th><th>Lev</th><th>진입</th><th>현재</th><th>수익률</th><th>손익</th><th>TP</th><th>SL</th></tr>
+                          <tr><th>코인</th><th>방향</th><th>레버리지</th><th>진입</th><th>현재</th><th>수익률</th><th>손익</th><th>익절</th><th>손절</th></tr>
                         </thead>
                         <tbody id="positionBody"></tbody>
                       </table>
@@ -1006,6 +1074,54 @@
       'BTCUSDT','ETHUSDT','SOLUSDT','DOGEUSDT','XRPUSDT','ARBUSDT','OPUSDT','FILUSDT','ACEUSDT',
       'DEEPUSDT','DYMUSDT','LABUSDT','CFGUSDT'
     ];
+    const HELP_TEXT = {
+      marketScope:'바이낸스 선물의 USDT 무기한 계약 전체를 자동으로 불러와 동시에 후보를 찾습니다. 개별 코인을 고르는 설정은 백테스트 대상에서 제외됩니다.',
+      preset:'빠르게 시작하기 위한 예시 조건입니다. 현재 화면은 전체 코인을 스캔하므로 프리셋은 전략 값만 참고합니다.',
+      interval:'캔들 하나가 나타내는 시간입니다. 자동 최적을 선택하면 1분, 3분, 5분, 15분을 비교해 결과가 가장 좋은 분봉을 고릅니다.',
+      candleCount:'백테스트에 사용할 과거 캔들 수입니다. 많을수록 오래 검증하지만 실행 시간이 길어집니다.',
+      dataMode:'가격 데이터를 가져오는 방식입니다. 로컬 캐시는 빠르고, 바이낸스 최신은 가장 최근 데이터를 다시 요청합니다.',
+      mode:'진입 신호를 만드는 매매법입니다. 자동 최적은 눌림목, 추세 돌파, 평균가 회복, 고점/저점 돌파를 비교합니다.',
+      side:'롱은 상승에 베팅하고, 숏은 하락에 베팅합니다. 양방향은 두 방향을 모두 비교합니다.',
+      grid:'조건 조합을 얼마나 넓게 탐색할지 정합니다. 깊게 탐색할수록 오래 걸리지만 더 많은 조합을 봅니다.',
+      comboLimit:'자동 최적화 때 검사할 최대 조합 수입니다. 너무 높이면 전체 코인 스캔 시간이 크게 늘어납니다.',
+      ema:'지수이동평균입니다. 빠른 EMA가 느린 EMA보다 민감하게 움직여 추세 전환을 빨리 감지합니다.',
+      pulse:'현재 거래대금이 평소보다 몇 배 커졌는지 보는 값입니다. 높을수록 강한 움직임만 잡습니다.',
+      vwap:'거래량가중평균가격입니다. 실제 거래가 많이 된 평균 가격대라 지지와 저항 확인에 씁니다.',
+      breakout:'최근 몇 개 캔들의 고점 또는 저점을 돌파해야 진입으로 볼지 정합니다.',
+      atr:'평균 진폭 비율입니다. 변동성이 너무 낮거나 너무 높은 구간을 걸러냅니다.',
+      cooldown:'한 번 거래가 끝난 뒤 몇 개 캔들을 쉬고 다음 진입을 허용할지 정합니다.',
+      leverage:'레버리지는 증거금 대비 포지션 크기 배수입니다. 수익과 손실이 모두 같은 배수로 커집니다.',
+      margin:'계좌 평가액 중 한 포지션에 증거금으로 사용할 비율입니다.',
+      capital:'백테스트와 모의투자의 시작 자본입니다.',
+      maxPosition:'한 번에 열 수 있는 포지션 명목 금액의 상한입니다.',
+      tp:'목표 수익률에 닿으면 자동으로 이익 실현하는 구간입니다.',
+      sl:'허용 손실률에 닿으면 자동으로 손절하는 구간입니다.',
+      trail:'가격이 유리하게 움직인 뒤 손절선을 따라 올리거나 내려 수익을 보호하는 폭입니다.',
+      maxHold:'진입 후 최대 몇 개 캔들까지 보유할지 정합니다. 시간이 지나면 조건과 관계없이 청산합니다.',
+      fee:'진입과 청산에 반영할 거래 수수료입니다.',
+      slippage:'주문 가격과 실제 체결 가격 차이를 보수적으로 반영하는 값입니다.',
+      stopSlip:'손절처럼 급하게 나가는 주문에 추가로 반영할 슬리피지 배수입니다.',
+      liqBuffer:'손절가와 예상 청산가 사이에 남겨둘 최소 안전거리입니다.',
+      mdd:'최고점 대비 계좌가 가장 크게 빠진 비율입니다. 낮을수록 버티기 쉬운 전략입니다.',
+      pf:'수익 팩터입니다. 총이익을 총손실로 나눈 값이며 1보다 크면 수익 거래가 손실 거래보다 큽니다.',
+      trades:'검증 기간에 발생한 거래 횟수입니다. 너무 적으면 우연일 가능성이 큽니다.',
+      return:'수수료, 슬리피지, 레버리지를 반영한 백테스트 수익률입니다.',
+      testReturn:'뒤쪽 검증 구간에서만 계산한 수익률입니다. 과최적화 여부를 볼 때 중요합니다.',
+      winRate:'전체 거래 중 수익으로 끝난 거래의 비율입니다.',
+      liquidation:'레버리지 포지션이 강제 청산된 횟수입니다. 자동매매에서는 낮거나 0이어야 합니다.',
+      score:'수익률, 낙폭, 거래 수, 청산 위험을 함께 반영한 내부 순위 점수입니다.',
+      paperEquity:'모의투자 계좌의 현재 평가 금액입니다.',
+      realized:'이미 청산되어 확정된 손익입니다.',
+      unrealized:'아직 열려 있는 포지션의 평가 손익입니다.',
+      openPositions:'현재 열려 있는 포지션 수입니다.',
+      status:'모의투자가 브라우저, 서버, 깃허브 자동 실행 중 어디에서 움직이는지 보여줍니다.',
+      paperTick:'모의투자 가격과 신호를 다시 확인하는 주기입니다.',
+      paperMaxOpen:'동시에 열 수 있는 최대 포지션 개수입니다.',
+      paperSource:'모의투자 진입 신호를 선택 후보에서 쓸지, 현재 입력 조건에서 새로 만들지 정합니다.',
+      paperUniverse:'모의투자가 감시할 종목 범위입니다. 전체 코인은 바이낸스 USDT 전체를 뜻합니다.',
+      pnl:'포지션 또는 거래에서 발생한 손익 금액입니다.',
+      price:'진입, 현재가, 익절가, 손절가처럼 거래 판단에 쓰는 가격입니다.'
+    };
     const API = 'https://fapi.binance.com/fapi/v1';
     const els = {};
     const state = {
@@ -1048,6 +1164,7 @@
       populateSymbolSelect();
       renderSymbolChips();
       bindEvents();
+      installKoreanTerms();
       renderCandidates();
       renderSelected(null);
       renderCoinCharts();
@@ -1080,6 +1197,172 @@
 
     function initDom(){
       document.querySelectorAll('[id]').forEach(el => els[el.id] = el);
+    }
+
+    function installKoreanTerms(){
+      const fieldTerms = {
+        presetSelect:['프리셋','preset'],
+        intervalSelect:['분봉','interval'],
+        candleCount:['캔들','candleCount'],
+        dataMode:['데이터','dataMode'],
+        modeSelect:['전략','mode'],
+        sideSelect:['방향','side'],
+        gridSelect:['탐색','grid'],
+        comboLimit:['조합 제한','comboLimit'],
+        fastEma:['빠른 EMA','ema'],
+        slowEma:['느린 EMA','ema'],
+        pulse:['거래량 배수','pulse'],
+        vwapLen:['VWAP 길이','vwap'],
+        breakoutLen:['돌파 길이','breakout'],
+        minAtr:['최소 ATR%','atr'],
+        maxAtr:['최대 ATR%','atr'],
+        cooldown:['진입 쿨다운','cooldown'],
+        leverages:['레버리지 목록','leverage'],
+        marginPct:['증거금 %','margin'],
+        capital:['초기 자본','capital'],
+        maxPosition:['최대 포지션','maxPosition'],
+        tpPct:['익절 %','tp'],
+        slPct:['손절 %','sl'],
+        trailPct:['트레일 %','trail'],
+        maxHold:['최대 보유봉','maxHold'],
+        feePct:['수수료 %','fee'],
+        slipPct:['슬리피지 %','slippage'],
+        stopSlipMult:['손절 슬립 배수','stopSlip'],
+        liqBuffer:['최소 청산 버퍼','liqBuffer'],
+        maxDd:['최대 MDD','mdd'],
+        minPf:['최소 PF','pf'],
+        minTrades:['최소 거래','trades'],
+        paperTickSec:['갱신 초','paperTick'],
+        paperMaxOpen:['최대 동시','paperMaxOpen'],
+        paperSource:['신호 출처','paperSource'],
+        paperUniverse:['종목 범위','paperUniverse']
+      };
+      Object.entries(fieldTerms).forEach(([id, [label, key]]) => setFieldLabel(id, label, key));
+      [
+        ['rejectLiq','청산 제외','liquidation'],
+        ['mtmDd','장중 MDD','mdd'],
+        ['saveJournal','모의 저장','status'],
+        ['paperAutoClose','자동 청산','sl'],
+        ['paperNoDuplicate','중복 제외','paperMaxOpen']
+      ].forEach(([id, label, key]) => setCheckLabel(id, label, key));
+      [
+        ['mReturn','최고 전체 수익률','return'],
+        ['mTest','검증 수익률','testReturn'],
+        ['mDd','최대 낙폭','mdd'],
+        ['mTrades','거래 수','trades'],
+        ['mWin','승률','winRate'],
+        ['mPf','수익 팩터','pf'],
+        ['pEquity','평가 자산','paperEquity'],
+        ['pRealized','실현 손익','realized'],
+        ['pUnrealized','미실현 손익','unrealized'],
+        ['pOpen','오픈 포지션','openPositions'],
+        ['pWin','승률','winRate'],
+        ['pState','상태','status']
+      ].forEach(([id, label, key]) => setMetricLabel(id, label, key));
+      setOptionText('modeSelect', {
+        auto:'자동 최적',
+        pullback:'눌림목',
+        impulse:'추세 돌파',
+        reclaim:'평균가 회복',
+        breakout:'고점/저점 돌파',
+        hybrid:'혼합'
+      });
+      setOptionText('sideSelect', {BOTH:'양방향', LONG:'롱', SHORT:'숏'});
+      setOptionText('paperUniverse', {symbols:'전체 코인', candidate:'검증 후보'});
+      setOptionText('paperSource', {selected:'선택 후보', current:'현재 조건'});
+      const scopeTitle = document.querySelector('.market-scope .candidate-top span:first-child');
+      const scopePill = document.querySelector('.market-scope .pill');
+      const scopeSub = document.querySelector('.market-scope .candidate-sub');
+      if(scopeTitle) scopeTitle.innerHTML = term('바이낸스 USDT 전체 마켓', 'marketScope');
+      if(scopePill) scopePill.textContent = '자동';
+      if(scopeSub) scopeSub.textContent = '코인 선택 없이 모든 바이낸스 USDT 무기한 종목을 자동으로 스캔합니다.';
+      installHeaderTips();
+    }
+
+    function setFieldLabel(id, label, key){
+      const control = els[id];
+      const labelEl = control?.closest('label');
+      if(!control || !labelEl || labelEl.querySelector(':scope > .term-label')) return;
+      for(const node of [...labelEl.childNodes]){
+        if(node === control || (node.nodeType === Node.ELEMENT_NODE && node.contains(control))) break;
+        if(node.nodeType === Node.TEXT_NODE) node.textContent = '';
+      }
+      labelEl.insertAdjacentHTML('afterbegin', `${term(label, key)} `);
+    }
+
+    function setCheckLabel(id, label, key){
+      const control = els[id];
+      const labelEl = control?.closest('label');
+      if(!control || !labelEl || labelEl.querySelector('.term-label')) return;
+      for(const node of [...labelEl.childNodes]){
+        if(node.nodeType === Node.TEXT_NODE) node.textContent = '';
+      }
+      control.insertAdjacentHTML('afterend', ` ${term(label, key)}`);
+    }
+
+    function setMetricLabel(id, label, key){
+      const k = els[id]?.closest('.metric')?.querySelector('.k');
+      if(k) k.innerHTML = term(label, key);
+    }
+
+    function setOptionText(id, labels){
+      const select = els[id];
+      if(!select) return;
+      [...select.options].forEach(option => {
+        if(Object.prototype.hasOwnProperty.call(labels, option.value)) option.textContent = labels[option.value];
+      });
+    }
+
+    function installHeaderTips(){
+      const headerTerms = new Map([
+        ['코인',['코인','marketScope']],
+        ['분봉',['분봉','interval']],
+        ['방향',['방향','side']],
+        ['전략',['전략','mode']],
+        ['Lev',['레버리지','leverage']],
+        ['레버리지',['레버리지','leverage']],
+        ['All',['전체 수익률','return']],
+        ['전체 수익률',['전체 수익률','return']],
+        ['Test',['검증 수익률','testReturn']],
+        ['검증 수익률',['검증 수익률','testReturn']],
+        ['MDD',['최대 낙폭','mdd']],
+        ['최대 낙폭',['최대 낙폭','mdd']],
+        ['거래',['거래 수','trades']],
+        ['승률',['승률','winRate']],
+        ['PF',['수익 팩터','pf']],
+        ['수익 팩터',['수익 팩터','pf']],
+        ['청산',['청산','liquidation']],
+        ['점수',['점수','score']],
+        ['진입',['진입가','price']],
+        ['현재',['현재가','price']],
+        ['수익률',['수익률','return']],
+        ['손익',['손익','pnl']],
+        ['TP',['익절','tp']],
+        ['익절',['익절','tp']],
+        ['SL',['손절','sl']],
+        ['손절',['손절','sl']],
+        ['상태',['상태','status']],
+        ['가격',['가격','price']],
+        ['거래량 배수',['거래량 배수','pulse']],
+        ['ATR%',['ATR%','atr']],
+        ['EMA',['EMA','ema']],
+        ['VWAP',['VWAP','vwap']],
+        ['진입 조건',['진입 조건','mode']]
+      ]);
+      document.querySelectorAll('th').forEach(th => {
+        const key = th.textContent.trim();
+        const item = headerTerms.get(key);
+        if(item) th.innerHTML = term(item[0], item[1]);
+      });
+    }
+
+    function term(label, key){
+      return `<span class="term-label">${escapeHtml(label)}${helpTip(key)}</span>`;
+    }
+
+    function helpTip(key){
+      const text = HELP_TEXT[key] || key;
+      return `<span class="help-tip" tabindex="0" role="note" aria-label="${escapeHtml(text)}" data-help="${escapeHtml(text)}"></span>`;
     }
 
     function bindEvents(){
@@ -1142,7 +1425,7 @@
 
     function renderSymbolChips(){
       if(!els.symbolChips) return;
-      const symbols = [`${ALL_SYMBOLS.length} USDT markets`];
+      const symbols = [`${ALL_SYMBOLS.length}개 USDT 마켓`];
       els.symbolChips.innerHTML = symbols.map(sym => `
         <span class="coin-chip">${sym}<button type="button" data-symbol="${sym}" aria-label="${sym} 제거"><i data-lucide="x"></i></button></span>
       `).join('');
@@ -1615,7 +1898,7 @@
           <td>${i+1}</td>
           <td>${r.symbol}</td>
           <td>${r.interval}</td>
-          <td><span class="pill ${r.side.toLowerCase()}">${r.side}</span></td>
+          <td><span class="pill ${r.side.toLowerCase()}">${sideName(r.side)}</span></td>
           <td>${strategyName(r.params)}</td>
           <td>${r.leverage}x</td>
           <td class="${cls(r.all.returnPct)}">${fmtPct(r.all.returnPct)}</td>
@@ -1660,12 +1943,12 @@
         clearCanvas(els.ddCanvas);
         return;
       }
-      setMetric('mReturn', fmtPct(best.all.returnPct), `${best.symbol} ${best.interval} ${best.side}`, cls(best.all.returnPct));
-      setMetric('mTest', fmtPct(best.test.returnPct), `train ${fmtPct(best.train.returnPct)}`, cls(best.test.returnPct));
-      setMetric('mDd', `${best.all.maxDd.toFixed(2)}%`, `${best.all.liquidations} liq`, best.all.maxDd > 20 ? 'red' : 'amber');
-      setMetric('mTrades', String(best.all.trades), `test ${best.test.trades}`, '');
-      setMetric('mWin', `${best.all.winRate.toFixed(1)}%`, `avg ${best.all.avgRet.toFixed(2)}%`, best.all.winRate >= 50 ? 'green' : '');
-      setMetric('mPf', best.all.pf.toFixed(2), `score ${best.score.toFixed(1)}`, best.all.pf >= 1.5 ? 'green' : 'amber');
+      setMetric('mReturn', fmtPct(best.all.returnPct), `${best.symbol} ${best.interval} ${sideName(best.side)}`, cls(best.all.returnPct));
+      setMetric('mTest', fmtPct(best.test.returnPct), `학습 ${fmtPct(best.train.returnPct)}`, cls(best.test.returnPct));
+      setMetric('mDd', `${best.all.maxDd.toFixed(2)}%`, `청산 ${best.all.liquidations}회`, best.all.maxDd > 20 ? 'red' : 'amber');
+      setMetric('mTrades', String(best.all.trades), `검증 ${best.test.trades}`, '');
+      setMetric('mWin', `${best.all.winRate.toFixed(1)}%`, `평균 ${best.all.avgRet.toFixed(2)}%`, best.all.winRate >= 50 ? 'green' : '');
+      setMetric('mPf', best.all.pf.toFixed(2), `점수 ${best.score.toFixed(1)}`, best.all.pf >= 1.5 ? 'green' : 'amber');
       if(!state.selected) drawBacktestCharts(best);
       renderCoinCharts();
     }
@@ -1676,14 +1959,14 @@
         els.selectedBox.innerHTML = '<div class="line-item"><span>후보</span><span>-</span></div>';
         return;
       }
-      els.selectedName.textContent = `${row.symbol} ${row.side} ${row.leverage}x`;
+      els.selectedName.textContent = `${row.symbol} ${sideName(row.side)} ${row.leverage}x`;
       const liqAdverse = liquidationAdversePct(row.leverage);
       els.selectedBox.innerHTML = [
         ['코인', row.symbol],
-        ['조건', `${row.interval} ${row.side} ${row.leverage}x`],
+        ['조건', `${row.interval} ${sideName(row.side)} ${row.leverage}x`],
         ['전략', strategyName(row.params)],
         ['전체 / 검증', `${fmtPct(row.all.returnPct)} / ${fmtPct(row.test.returnPct)}`],
-        ['MDD / PF', `${row.all.maxDd.toFixed(2)}% / ${row.all.pf.toFixed(2)}`],
+        ['최대 낙폭 / 수익 팩터', `${row.all.maxDd.toFixed(2)}% / ${row.all.pf.toFixed(2)}`],
         ['거래 / 승률', `${row.all.trades} / ${row.all.winRate.toFixed(1)}%`],
         ['청산 버퍼', `${Math.max(0, liqAdverse - row.params.sl).toFixed(2)}%`],
         ['판정', row.tradable ? '통과' : '주의']
@@ -1691,9 +1974,9 @@
     }
 
     function drawBacktestCharts(row){
-      drawLine(els.equityCanvas, row.all.equity.map(x => x.value), {label:'Equity', color:'#0ecb81', fill:true});
-      drawBars(els.tradeCanvas, row.all.tradeRows.map(t => t.pnl), {label:'Trade PnL'});
-      drawLine(els.ddCanvas, row.all.drawdowns.map(x => x.value), {label:'Drawdown', color:'#f6465d', invert:true});
+      drawLine(els.equityCanvas, row.all.equity.map(x => x.value), {label:'자산 곡선', color:'#0ecb81', fill:true});
+      drawBars(els.tradeCanvas, row.all.tradeRows.map(t => t.pnl), {label:'거래별 손익'});
+      drawLine(els.ddCanvas, row.all.drawdowns.map(x => x.value), {label:'낙폭', color:'#f6465d', invert:true});
     }
 
     function renderCoinCharts(){
@@ -1713,7 +1996,7 @@
           <div class="coin-chart-head">
             <div class="coin-chart-title">
               <strong>${item.symbol}</strong>
-              <span>${r ? `${r.interval} ${r.side} ${r.leverage}x ${strategyName(r.params)}` : '백테스트 후 표시'}</span>
+              <span>${r ? `${r.interval} ${sideName(r.side)} ${r.leverage}x ${strategyName(r.params)}` : '백테스트 후 표시'}</span>
             </div>
             <span class="pill ${r && r.test.returnPct >= 0 ? 'ok' : ''}">${r ? fmtPct(r.test.returnPct) : '-'}</span>
           </div>
@@ -1744,7 +2027,7 @@
         if(!item?.row){
           const ctx = canvas.getContext('2d');
           drawGrid(ctx, canvas.width, canvas.height);
-          drawEmpty(ctx, canvas.width, canvas.height, 'No result');
+          drawEmpty(ctx, canvas.width, canvas.height, '결과 없음');
           return;
         }
         const values = item.row.all.equity.map(x => x.value);
@@ -1801,7 +2084,7 @@
         <div class="coin-chart-head">
           <div class="coin-chart-title">
             <strong>${item.symbol || '-'}</strong>
-            <span>${row ? `${row.interval} ${row.side} ${row.leverage}x ${strategyName(row.params)} · 어제 B ${summary.buy} / S ${summary.sell}` : '백테스트 후 캔들 위에 B/S 마커 표시'}</span>
+            <span>${row ? `${row.interval} ${sideName(row.side)} ${row.leverage}x ${strategyName(row.params)} · 어제 매수 ${summary.buy} / 매도 ${summary.sell}` : '백테스트 후 캔들 위에 매수/매도 표시'}</span>
           </div>
           <span class="pill ${row && row.test.returnPct >= 0 ? 'ok' : ''}">${row ? fmtPct(row.test.returnPct) : '-'}</span>
         </div>
@@ -1829,7 +2112,7 @@
       if(!item?.row){
         const ctx = canvas.getContext('2d');
         drawGrid(ctx, canvas.width, canvas.height);
-        drawEmpty(ctx, canvas.width, canvas.height, 'Run backtest to show candles');
+        drawEmpty(ctx, canvas.width, canvas.height, '백테스트 후 캔들 표시');
         return;
       }
       drawCandleTrades(canvas, cachedCandlesForRow(item.row), item.row);
@@ -1880,7 +2163,7 @@
       ctx.clearRect(0,0,w,h);
       drawGrid(ctx,w,h);
       if(!candles || candles.length < 2){
-        drawEmpty(ctx,w,h,'No candle cache');
+        drawEmpty(ctx,w,h,'캔들 캐시 없음');
         return;
       }
       const maxBars = Math.min(260, candles.length);
@@ -1959,11 +2242,11 @@
         ctx.textBaseline = 'alphabetic';
       });
       const summary = yesterdayTradeSummary(row.all.tradeRows || [], row.side);
-      drawLabel(ctx,w,h,`${row.symbol} ${row.interval} · B/S markers · yesterday B ${summary.buy} S ${summary.sell}`);
+      drawLabel(ctx,w,h,`${row.symbol} ${row.interval} · 매수/매도 표시 · 어제 매수 ${summary.buy} 매도 ${summary.sell}`);
       ctx.fillStyle = '#95a4a8';
       ctx.font = `${Math.max(10, Math.floor(h*.03))}px system-ui`;
       ctx.textAlign = 'right';
-      ctx.fillText(`${view.length} candles · ${visibleMarkers.length}/${markers.length} markers`, w - 12, h - 12);
+      ctx.fillText(`${view.length}개 캔들 · 표시 ${visibleMarkers.length}/${markers.length}`, w - 12, h - 12);
       ctx.textAlign = 'left';
     }
 
@@ -1971,8 +2254,8 @@
       els.candidateList.innerHTML = VALIDATED.map(c => `
         <div class="candidate" data-symbol="${c.symbol}">
           <div class="candidate-top"><span>${c.symbol}</span><span class="pill ok">${fmtPct(c.test)}</span></div>
-          <div class="candidate-sub">${c.interval} ${c.side} ${c.leverage}x ${modeName(c.mode)} ${c.fast}/${c.slow} TP${c.tp} SL${c.sl}</div>
-          <div class="candidate-sub">All ${fmtPct(c.all)} · MDD ${c.mdd.toFixed(2)}%</div>
+          <div class="candidate-sub">${c.interval} ${sideName(c.side)} ${c.leverage}x ${modeName(c.mode)} ${c.fast}/${c.slow} 익절${c.tp} 손절${c.sl}</div>
+          <div class="candidate-sub">전체 ${fmtPct(c.all)} · 최대 낙폭 ${c.mdd.toFixed(2)}%</div>
         </div>
       `).join('');
       els.candidateList.querySelectorAll('.candidate').forEach(el => {
@@ -2053,9 +2336,9 @@
             const ind = hitInd || indicators(candles, paramsList[0] || singleParams(s));
             const pulse = ind.avgQuote[i-1] ? c.quoteVolume / ind.avgQuote[i-1] : 1;
             const atrPct = c.close ? ind.atr[i] / c.close * 100 : 0;
-            rows.push({symbol, interval, state:hitSide === '-' ? 'WAIT' : 'ENTRY', side:hitSide, strategy:hitParams ? strategyName(hitParams) : '-', price:c.close, pulse, atrPct, ema:`${ind.emaFast[i].toFixed(5)} / ${ind.emaSlow[i].toFixed(5)}`, vwap:ind.vwap[i], ok:hitSide !== '-'});
+            rows.push({symbol, interval, state:hitSide === '-' ? '대기' : '진입', side:hitSide, strategy:hitParams ? strategyName(hitParams) : '-', price:c.close, pulse, atrPct, ema:`${ind.emaFast[i].toFixed(5)} / ${ind.emaSlow[i].toFixed(5)}`, vwap:ind.vwap[i], ok:hitSide !== '-'});
           }catch(err){
-            rows.push({symbol, interval, state:'ERROR', side:'-', strategy:'-', price:0, pulse:0, atrPct:0, ema:'-', vwap:0, ok:false});
+            rows.push({symbol, interval, state:'오류', side:'-', strategy:'-', price:0, pulse:0, atrPct:0, ema:'-', vwap:0, ok:false});
           }
         }
       }
@@ -2064,7 +2347,7 @@
         <tr>
           <td>${r.symbol} ${r.interval}</td>
           <td><span class="pill ${r.ok ? 'ok' : ''}">${r.state}</span></td>
-          <td>${r.side === '-' ? '-' : `<span class="pill ${r.side.toLowerCase()}">${r.side}</span>`}</td>
+          <td>${r.side === '-' ? '-' : `<span class="pill ${r.side.toLowerCase()}">${sideName(r.side)}</span>`}</td>
           <td>${r.price ? fmtNum(r.price) : '-'}</td>
           <td>${r.pulse.toFixed(2)}</td>
           <td>${r.atrPct.toFixed(2)}%</td>
@@ -2079,7 +2362,7 @@
     async function startPaper(){
       if(state.serverPaper.available){
         if(state.serverPaper.readOnly){
-          toast('GitHub Pages mode is updated by GitHub Actions.');
+          toast('깃허브 페이지 모드는 GitHub Actions가 자동으로 갱신합니다.');
           return;
         }
         const data = await serverPaperRequest('/api/paper/start', {settings:readSettings()});
@@ -2107,7 +2390,7 @@
     function stopPaper(){
       if(state.serverPaper.available){
         if(state.serverPaper.readOnly){
-          toast('GitHub Pages mode is read-only.');
+          toast('깃허브 페이지 모드는 읽기 전용입니다.');
           return;
         }
         serverPaperRequest('/api/paper/stop', {}).then(data => {
@@ -2132,7 +2415,7 @@
     function resetPaper(){
       if(state.serverPaper.available){
         if(state.serverPaper.readOnly){
-          toast('GitHub Pages mode is read-only.');
+          toast('깃허브 페이지 모드는 읽기 전용입니다.');
           return;
         }
         serverPaperRequest('/api/paper/reset', {settings:readSettings()}).then(data => {
@@ -2285,28 +2568,28 @@
       setMetric('pEquity', fmtMoney(eq), fmtPct((eq/state.paper.initial-1)*100), cls(eq-state.paper.initial));
       setMetric('pRealized', fmtMoney(realized), '수수료 포함', cls(realized));
       setMetric('pUnrealized', fmtMoney(unreal), '현재가 기준', cls(unreal));
-      setMetric('pOpen', String(state.paper.positions.length), `${closed.length} closed`, '');
+      setMetric('pOpen', String(state.paper.positions.length), `${closed.length}건 종료`, '');
       setMetric('pWin', closed.length ? `${(wins/closed.length*100).toFixed(1)}%` : '-', `${wins}/${closed.length}`, '');
       const paperMode = state.serverPaper.available
-        ? (state.serverPaper.readOnly ? 'github actions' : 'server mode')
-        : (state.paper.running ? 'browser mode' : 'stopped');
+        ? (state.serverPaper.readOnly ? '깃허브 자동 실행' : '서버 모드')
+        : (state.paper.running ? '브라우저 모드' : '정지');
       setMetric('pState', state.paper.running ? 'ON' : 'OFF', paperMode, state.paper.running ? 'green' : 'red');
       els.positionBody.innerHTML = state.paper.positions.map(p => {
         const ret = markRetPct(p.entry, p.mark, p.side) - number(els.feePct?.value, .08);
         const pnl = p.order * ret / 100;
         return `<tr>
-          <td>${p.symbol}</td><td><span class="pill ${p.side.toLowerCase()}">${p.side}</span></td><td>${p.leverage}x</td>
+          <td>${p.symbol}</td><td><span class="pill ${p.side.toLowerCase()}">${sideName(p.side)}</span></td><td>${p.leverage}x</td>
           <td>${fmtNum(p.entry)}</td><td>${fmtNum(p.mark)}</td><td class="${cls(ret)}">${fmtPct(ret)}</td><td class="${cls(pnl)}">${fmtMoney(pnl)}</td>
           <td>${fmtNum(p.tp)}</td><td>${fmtNum(p.sl)}</td>
         </tr>`;
       }).join('');
       els.journalList.innerHTML = state.paper.journal.slice(0,80).map(j => `
         <div class="journal-row">
-          <div class="candidate-top"><span>${j.symbol} ${j.side} ${j.action}</span><span class="${cls(j.pnl)}">${fmtMoney(j.pnl)}</span></div>
+          <div class="candidate-top"><span>${j.symbol} ${sideName(j.side)} ${actionName(j.action)}</span><span class="${cls(j.pnl)}">${fmtMoney(j.pnl)}</span></div>
           <div class="candidate-sub">${new Date(j.time).toLocaleString('ko-KR')} · ${j.reason} · ${fmtNum(j.price)}</div>
         </div>
       `).join('');
-      drawLine(els.paperCanvas, state.paper.equity.map(x => x.value), {label:'Paper Equity', color:'#25bfd1', fill:true});
+      drawLine(els.paperCanvas, state.paper.equity.map(x => x.value), {label:'모의 자산', color:'#25bfd1', fill:true});
     }
 
     function persistPaper(){
@@ -2345,7 +2628,7 @@
         hydrateServerPaper(paper);
         startServerPaperSync();
         renderPaper();
-        setStatus('GitHub Actions paper connected', paper.running ? 'good' : '');
+        setStatus('깃허브 자동 모의투자 연결됨', paper.running ? 'good' : '');
         return true;
       }catch{
         return false;
@@ -2409,24 +2692,24 @@
       const best = state.selected || state.results.find(r => r.tradable && !r.system);
       const top = state.results.filter(r => !r.system).slice(0, 8);
       const lines = [];
-      lines.push('# Binance Lab Backtest Report');
+      lines.push('# 바이낸스 랩 백테스트 보고서');
       lines.push('');
       lines.push(`- 실행 코인: Binance USDT 전체 ${s.symbols.length}개 자동 스캔`);
-      lines.push(`- 조건: ${s.interval}, ${s.candleCount} candles, ${s.side}, ${s.grid}`);
-      lines.push(`- 전략: ${modeName(s.mode)} / EMA ${s.fast}/${s.slow} / volume x${s.pulse}`);
-      lines.push(`- 청산: TP ${s.tp}%, SL ${s.sl}%, Trail ${s.trail}%, hold ${s.maxHold}`);
-      lines.push(`- 리스크: leverage ${s.leverages.join(',')}x, margin ${s.marginPct}%, max ${s.maxPosition} USDT, fee ${s.feePct}%, slip ${s.slipPct}%`);
+      lines.push(`- 조건: ${s.interval}, 캔들 ${s.candleCount}개, ${sideName(s.side)}, ${gridName(s.grid)}`);
+      lines.push(`- 전략: ${modeName(s.mode)} / EMA ${s.fast}/${s.slow} / 거래량 ${s.pulse}배`);
+      lines.push(`- 청산: 익절 ${s.tp}%, 손절 ${s.sl}%, 트레일 ${s.trail}%, 최대 보유봉 ${s.maxHold}`);
+      lines.push(`- 리스크: 레버리지 ${s.leverages.join(',')}x, 증거금 ${s.marginPct}%, 최대 포지션 ${s.maxPosition} USDT, 수수료 ${s.feePct}%, 슬리피지 ${s.slipPct}%`);
       lines.push('');
       if(best){
-        lines.push('## Best');
-        lines.push(`- ${best.symbol} ${best.interval} ${best.side} ${best.leverage}x ${strategyName(best.params)}`);
-        lines.push(`- All ${fmtPct(best.all.returnPct)}, Test ${fmtPct(best.test.returnPct)}, Train ${fmtPct(best.train.returnPct)}`);
-        lines.push(`- MDD ${best.all.maxDd.toFixed(2)}%, Trades ${best.all.trades}, Win ${best.all.winRate.toFixed(1)}%, PF ${best.all.pf.toFixed(2)}, Liq ${best.all.liquidations}`);
+        lines.push('## 최고 후보');
+        lines.push(`- ${best.symbol} ${best.interval} ${sideName(best.side)} ${best.leverage}x ${strategyName(best.params)}`);
+        lines.push(`- 전체 ${fmtPct(best.all.returnPct)}, 검증 ${fmtPct(best.test.returnPct)}, 학습 ${fmtPct(best.train.returnPct)}`);
+        lines.push(`- 최대 낙폭 ${best.all.maxDd.toFixed(2)}%, 거래 ${best.all.trades}, 승률 ${best.all.winRate.toFixed(1)}%, 수익 팩터 ${best.all.pf.toFixed(2)}, 청산 ${best.all.liquidations}`);
         lines.push('');
       }
-      lines.push('## Top Candidates');
+      lines.push('## 상위 후보');
       top.forEach((r,i) => {
-        lines.push(`${i+1}. ${r.symbol} ${r.side} ${r.leverage}x ${strategyName(r.params)} · All ${fmtPct(r.all.returnPct)} · Test ${fmtPct(r.test.returnPct)} · MDD ${r.all.maxDd.toFixed(2)}% · PF ${r.all.pf.toFixed(2)}`);
+        lines.push(`${i+1}. ${r.symbol} ${sideName(r.side)} ${r.leverage}x ${strategyName(r.params)} · 전체 ${fmtPct(r.all.returnPct)} · 검증 ${fmtPct(r.test.returnPct)} · 최대 낙폭 ${r.all.maxDd.toFixed(2)}% · 수익 팩터 ${r.all.pf.toFixed(2)}`);
       });
       lines.push('');
       lines.push('## 판단');
@@ -2529,11 +2812,20 @@
 
     function strategyName(p){
       if(!p || !p.mode) return '-';
-      const m = p.mode === 'pullback' ? 'PB' : p.mode === 'impulse' ? 'IMP' : p.mode === 'reclaim' ? 'VWAP' : 'BO';
-      return `${m} ${p.fast}/${p.slow} V${p.pulse} TP${p.tp} SL${p.sl}${p.trail ? ` T${p.trail}` : ''}`;
+      const m = modeName(p.mode);
+      return `${m} ${p.fast}/${p.slow} 거래량x${p.pulse} 익절${p.tp} 손절${p.sl}${p.trail ? ` 트레일${p.trail}` : ''}`;
     }
     function modeName(mode){
-      return mode === 'auto' ? 'Auto' : mode === 'pullback' ? 'Pullback' : mode === 'impulse' ? 'Impulse' : mode === 'reclaim' ? 'VWAP' : mode === 'breakout' ? 'Breakout' : 'Hybrid';
+      return mode === 'auto' ? '자동 최적' : mode === 'pullback' ? '눌림목' : mode === 'impulse' ? '추세 돌파' : mode === 'reclaim' ? '평균가 회복' : mode === 'breakout' ? '고점/저점 돌파' : '혼합';
+    }
+    function sideName(side){
+      return side === 'BOTH' ? '양방향' : side === 'LONG' ? '롱' : side === 'SHORT' ? '숏' : side;
+    }
+    function actionName(action){
+      return action === 'OPEN' ? '진입' : action === 'CLOSE' ? '청산' : action;
+    }
+    function gridName(grid){
+      return grid === 'auto' ? '자동 최적' : grid === 'fast' ? '빠른 탐색' : grid === 'deep' ? '넓은 탐색' : '고정 조건';
     }
     function emptySim(){ return {returnPct:0, finalEquity:0, maxDd:0, trades:0, liquidations:0, winRate:0, pf:0, avgRet:0, equity:[], drawdowns:[], tradeRows:[]}; }
     function liquidationAdversePct(leverage){ return Math.max(.05, 100 / Math.max(1, leverage) - .65 - .20); }
@@ -2623,7 +2915,7 @@
       if(state.selected) drawBacktestCharts(state.selected);
       else renderDashboard();
       drawCoinCharts();
-      drawLine(els.paperCanvas, state.paper.equity.map(x => x.value), {label:'Paper Equity', color:'#25bfd1', fill:true});
+      drawLine(els.paperCanvas, state.paper.equity.map(x => x.value), {label:'모의 자산', color:'#25bfd1', fill:true});
     }
 
     function drawLine(canvas, values, opts={}){
@@ -2633,7 +2925,7 @@
       ctx.clearRect(0,0,w,h);
       drawGrid(ctx,w,h);
       if(!values || values.length < 2){
-        drawEmpty(ctx,w,h,opts.label || 'No data');
+        drawEmpty(ctx,w,h,opts.label || '데이터 없음');
         return;
       }
       const min = Math.min(...values);
@@ -2666,7 +2958,7 @@
       const w=canvas.width,h=canvas.height;
       ctx.clearRect(0,0,w,h);
       drawGrid(ctx,w,h);
-      if(!values || !values.length){ drawEmpty(ctx,w,h,opts.label || 'No trades'); return; }
+      if(!values || !values.length){ drawEmpty(ctx,w,h,opts.label || '거래 없음'); return; }
       const maxAbs = Math.max(1e-9, ...values.map(v => Math.abs(v)));
       const mid = h/2;
       const bw = Math.max(2, w / values.length * .62);
