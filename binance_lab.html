@@ -181,6 +181,20 @@
       grid-template-columns:minmax(0,1fr) 72px;
       gap:8px;
     }
+    label:has(#presetSelect),
+    label:has(#symbolSelect),
+    label:has(#paperUniverse),
+    #symbolChips{
+      display:none;
+    }
+    .market-scope{
+      border:1px solid var(--line);
+      border-radius:8px;
+      background:#0b1114;
+      padding:12px;
+      display:grid;
+      gap:6px;
+    }
     .chip-row{
       display:flex;
       flex-wrap:wrap;
@@ -610,7 +624,11 @@
               </div>
             </label>
             <div class="chip-row" id="symbolChips"></div>
-            <input id="symbolsInput" type="hidden" value="ONUSDT,ZEREBROUSDT,TONUSDT,ICPUSDT,ONDOUSDT,SIRENUSDT" />
+            <div class="market-scope">
+              <div class="candidate-top"><span>All Binance USDT markets</span><span class="pill ok">AUTO</span></div>
+              <div class="candidate-sub">Coin selection is disabled. Every run scans the full Binance USDT market universe automatically.</div>
+            </div>
+            <input id="symbolsInput" type="hidden" value="ALL_BINANCE_USDT" />
             <div class="grid-2">
               <label>분봉
                 <select id="intervalSelect">
@@ -970,7 +988,7 @@
       {symbol:'ONDOUSDT', interval:'3m', side:'LONG', leverage:10, mode:'pullback', fast:8, slow:21, pulse:2.2, tp:2.8, sl:.75, trail:0, all:78.75, test:53.84, mdd:14.68},
       {symbol:'SIRENUSDT', interval:'1m', side:'LONG', leverage:10, mode:'impulse', fast:5, slow:13, pulse:1.8, tp:1.8, sl:1, trail:0, all:60.21, test:58.50, mdd:14.47}
     ];
-    const ALL_SYMBOLS = [
+    let ALL_SYMBOLS = [
       'ONUSDT','ZEREBROUSDT','TONUSDT','ICPUSDT','PLAYUSDT','SKYAIUSDT','VVVUSDT','SPORTFUNUSDT',
       'SAHARAUSDT','ONDOUSDT','SIRENUSDT','JUPUSDT','STRKUSDT','ZECUSDT','JTOUSDT','BILLUSDT',
       'TSTUSDT','SUIUSDT','BSBUSDT','PLUMEUSDT','GALAUSDT','CHIPUSDT','QUSDT','COLLECTUSDT',
@@ -1010,9 +1028,11 @@
       }
     };
 
-    document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('DOMContentLoaded', async () => {
       initDom();
       restoreSettings();
+      await loadAllMarketSymbols();
+      setSymbols(ALL_SYMBOLS, false);
       populateSymbolSelect();
       renderSymbolChips();
       bindEvents();
@@ -1025,6 +1045,26 @@
       resizeCanvases();
       window.addEventListener('resize', resizeCanvases);
     });
+
+    async function loadAllMarketSymbols(){
+      const urls = [`${API}/exchangeInfo`, 'https://data-api.binance.vision/api/v3/exchangeInfo'];
+      for(const url of urls){
+        try{
+          const res = await fetch(url, {cache:'no-store'});
+          if(!res.ok) continue;
+          const data = await res.json();
+          const symbols = (data.symbols || [])
+            .filter(x => x.status === 'TRADING' && x.quoteAsset === 'USDT' && (!x.contractType || x.contractType === 'PERPETUAL'))
+            .map(x => x.symbol)
+            .filter(sym => /^[A-Z0-9]+USDT$/.test(sym) && !/(UP|DOWN|BULL|BEAR)USDT$/.test(sym))
+            .sort();
+          if(symbols.length){
+            ALL_SYMBOLS = symbols;
+            return;
+          }
+        }catch{}
+      }
+    }
 
     function initDom(){
       document.querySelectorAll('[id]').forEach(el => els[el.id] = el);
@@ -1061,37 +1101,32 @@
 
     function populateSymbolSelect(){
       if(!els.symbolSelect) return;
-      const saved = new Set(currentSymbols());
-      const symbols = [...new Set([...ALL_SYMBOLS, ...saved])].sort();
+      const symbols = [...ALL_SYMBOLS].sort();
       els.symbolSelect.innerHTML = symbols.map(sym => `<option value="${sym}">${sym}</option>`).join('');
     }
 
     function currentSymbols(){
-      return parseSymbols(els.symbolsInput?.value || '');
+      return [...ALL_SYMBOLS];
     }
 
     function setSymbols(symbols, persist=true){
-      const normalized = [...new Set(symbols.map(s => String(s).trim().toUpperCase()).filter(Boolean).map(s => s.endsWith('USDT') ? s : `${s}USDT`))];
-      els.symbolsInput.value = normalized.join(',');
+      els.symbolsInput.value = ALL_SYMBOLS.join(',');
       populateSymbolSelect();
       renderSymbolChips();
       if(persist) saveSettings();
     }
 
     function addSelectedSymbol(){
-      const sym = els.symbolSelect.value;
-      if(!sym) return;
-      setSymbols([...currentSymbols(), sym]);
+      setSymbols(ALL_SYMBOLS);
     }
 
     function removeSymbol(symbol){
-      const next = currentSymbols().filter(s => s !== symbol);
-      setSymbols(next.length ? next : [symbol]);
+      setSymbols(ALL_SYMBOLS);
     }
 
     function renderSymbolChips(){
       if(!els.symbolChips) return;
-      const symbols = currentSymbols();
+      const symbols = [`${ALL_SYMBOLS.length} USDT markets`];
       els.symbolChips.innerHTML = symbols.map(sym => `
         <span class="coin-chip">${sym}<button type="button" data-symbol="${sym}" aria-label="${sym} 제거"><i data-lucide="x"></i></button></span>
       `).join('');
@@ -1109,7 +1144,7 @@
 
     function readSettings(){
       return {
-        symbols: parseSymbols(els.symbolsInput.value),
+        symbols: [...ALL_SYMBOLS],
         interval: els.intervalSelect.value,
         candleCount: number(els.candleCount.value, 3000),
         dataMode: els.dataMode.value,
@@ -1146,7 +1181,7 @@
         paperTickSec: number(els.paperTickSec.value, 12),
         paperMaxOpen: number(els.paperMaxOpen.value, 4),
         paperSource: els.paperSource.value,
-        paperUniverse: els.paperUniverse.value,
+        paperUniverse: 'all',
         paperAutoClose: els.paperAutoClose.checked,
         paperNoDuplicate: els.paperNoDuplicate.checked
       };
@@ -2170,7 +2205,7 @@
       const lines = [];
       lines.push('# Binance Lab Backtest Report');
       lines.push('');
-      lines.push(`- 실행 코인: ${s.symbols.join(', ') || '-'}`);
+      lines.push(`- 실행 코인: Binance USDT 전체 ${s.symbols.length}개 자동 스캔`);
       lines.push(`- 조건: ${s.interval}, ${s.candleCount} candles, ${s.side}, ${s.grid}`);
       lines.push(`- 전략: ${modeName(s.mode)} / EMA ${s.fast}/${s.slow} / volume x${s.pulse}`);
       lines.push(`- 청산: TP ${s.tp}%, SL ${s.sl}%, Trail ${s.trail}%, hold ${s.maxHold}`);

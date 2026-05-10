@@ -16,6 +16,7 @@ const API_BASES = (process.env.BINANCE_API_BASES || [
   .split(',')
   .map(x => x.trim().replace(/\/$/, ''))
   .filter(Boolean);
+const FETCH_CONCURRENCY = Math.max(1, Math.floor(number(process.env.PAPER_FETCH_CONCURRENCY, 16)));
 
 const DEFAULT_SYMBOLS = [
   'BTCUSDT',
@@ -38,7 +39,8 @@ const DEFAULT_SETTINGS = {
   minScore: 4.35,
   maxHoldMinutes: 360,
   intervals: ['3m', '5m', '15m'],
-  candleLimit: 260
+  candleLimit: 260,
+  scanSymbolLimit: 0
 };
 
 const now = Date.now();
@@ -61,7 +63,7 @@ async function main(){
   state.settings = readSettings(state.settings);
   state.errors = [];
 
-  const symbols = readSymbols();
+  const symbols = await readSymbols(state);
   const market = await loadMarket(symbols, state.settings.intervals, state.settings.candleLimit, state.errors);
 
   updateOpenPositions(state, market);
@@ -74,11 +76,18 @@ async function main(){
   await writeOutputs(state);
 }
 
-function readSymbols(){
-  return (process.env.PAPER_SYMBOLS || DEFAULT_SYMBOLS.join(','))
-    .split(',')
-    .map(x => x.trim().toUpperCase())
-    .filter(Boolean);
+async function readSymbols(state){
+  if(process.env.PAPER_SYMBOLS){
+    return parseSymbolList(process.env.PAPER_SYMBOLS);
+  }
+  const openSymbols = state.positions.map(p => p.symbol).filter(Boolean);
+  const listed = await loadExchangeSymbols().catch(error => {
+    state.errors.push(`[universe] ${error.message || String(error)}`);
+    return DEFAULT_SYMBOLS;
+  });
+  const merged = [...new Set([...openSymbols, ...listed])];
+  const limit = Math.max(0, Math.floor(state.settings.scanSymbolLimit || 0));
+  return limit ? merged.slice(0, limit) : merged;
 }
 
 function readSettings(previous = {}){
@@ -98,8 +107,66 @@ function readSettings(previous = {}){
     minScore: number(process.env.PAPER_MIN_SCORE, previous.minScore ?? DEFAULT_SETTINGS.minScore),
     maxHoldMinutes: number(process.env.PAPER_MAX_HOLD_MINUTES, previous.maxHoldMinutes ?? DEFAULT_SETTINGS.maxHoldMinutes),
     candleLimit: Math.floor(number(process.env.PAPER_KLINES, previous.candleLimit ?? DEFAULT_SETTINGS.candleLimit)),
+    scanSymbolLimit: Math.floor(number(process.env.PAPER_SCAN_SYMBOL_LIMIT, previous.scanSymbolLimit ?? DEFAULT_SETTINGS.scanSymbolLimit)),
     intervals
   };
+}
+
+async function loadExchangeSymbols(){
+  const info = await fetchJsonFromBases('/exchangeInfo');
+  const symbols = (info.symbols || [])
+    .filter(x => x.status === 'TRADING')
+    .filter(x => x.quoteAsset === 'USDT')
+    .filter(x => !x.contractType || x.contractType === 'PERPETUAL')
+    .map(x => x.symbol)
+    .filter(isTradableUsdtSymbol);
+
+  if(!symbols.length) return DEFAULT_SYMBOLS;
+
+  const volumes = await loadQuoteVolumes().catch(() => new Map());
+  return [...new Set(symbols)]
+    .sort((a,b) => (volumes.get(b) || 0) - (volumes.get(a) || 0) || a.localeCompare(b));
+}
+
+async function loadQuoteVolumes(){
+  const rows = await fetchJsonFromBases('/ticker/24hr');
+  const volumes = new Map();
+  if(!Array.isArray(rows)) return volumes;
+  rows.forEach(row => {
+    if(row?.symbol) volumes.set(row.symbol, number(row.quoteVolume, 0));
+  });
+  return volumes;
+}
+
+async function fetchJsonFromBases(pathname){
+  const failures = [];
+  for(const base of API_BASES){
+    try{
+      const res = await fetch(`${base}${pathname}`, { headers: { accept: 'application/json' } });
+      if(!res.ok){
+        failures.push(`${hostLabel(base)} HTTP ${res.status}`);
+        continue;
+      }
+      return await res.json();
+    }catch(error){
+      failures.push(`${hostLabel(base)} ${error.message || String(error)}`);
+    }
+  }
+  throw new Error(failures.join('; '));
+}
+
+function parseSymbolList(text){
+  return [...new Set(String(text)
+    .split(/[\s,]+/)
+    .map(x => x.trim().toUpperCase())
+    .filter(Boolean)
+    .map(x => x.endsWith('USDT') ? x : `${x}USDT`)
+    .filter(isTradableUsdtSymbol))];
+}
+
+function isTradableUsdtSymbol(symbol){
+  return /^[A-Z0-9]+USDT$/.test(symbol)
+    && !/(UP|DOWN|BULL|BEAR)USDT$/.test(symbol);
 }
 
 async function loadPreviousState(){
@@ -154,15 +221,25 @@ async function loadMarket(symbols, intervals, limit, errors){
   const jobs = [];
   for(const symbol of symbols){
     for(const interval of intervals){
-      jobs.push(fetchKlines(symbol, interval, limit)
-        .then(candles => {
+      jobs.push(async () => {
+        try{
+          const candles = await fetchKlines(symbol, interval, limit);
           if(!market.has(symbol)) market.set(symbol, new Map());
           market.get(symbol).set(interval, candles);
-        })
-        .catch(error => errors.push(`[${symbol} ${interval}] ${error.message || String(error)}`)));
+        }catch(error){
+          errors.push(`[${symbol} ${interval}] ${error.message || String(error)}`);
+        }
+      });
     }
   }
-  await Promise.all(jobs);
+  let next = 0;
+  const workers = Array.from({length: Math.min(FETCH_CONCURRENCY, jobs.length)}, async () => {
+    while(next < jobs.length){
+      const job = jobs[next++];
+      await job();
+    }
+  });
+  await Promise.all(workers);
   return market;
 }
 
