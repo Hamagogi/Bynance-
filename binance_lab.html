@@ -588,10 +588,24 @@
       display:grid;
       gap:8px;
     }
+    .entry-candidate-block{
+      margin:12px 0;
+      padding:10px;
+      border:1px solid var(--line);
+      border-radius:8px;
+      background:#0b1114;
+      display:grid;
+      gap:9px;
+    }
+    .entry-candidates{
+      max-height:280px;
+      overflow:auto;
+      padding-right:2px;
+    }
     .candidate{
       border:1px solid var(--line);
       border-radius:7px;
-      background:#0b1114;
+      background:#0d1417;
       padding:9px;
       display:grid;
       gap:7px;
@@ -722,7 +736,7 @@
           <div class="side-body">
             <label>프리셋
               <select id="presetSelect">
-                <option value="validated">1군 검증 후보</option>
+                <option value="validated">1군 진입 후보</option>
                 <option value="balanced">균형형 후보</option>
                 <option value="aggressive">공격형 후보</option>
                 <option value="majors">대형 코인</option>
@@ -794,6 +808,13 @@
                   <option value="SHORT">숏</option>
                 </select>
               </label>
+            </div>
+            <div class="entry-candidate-block">
+              <div class="section-subhead">
+                <span>진입 조건 후보</span>
+                <span>클릭 시 조건 적용</span>
+              </div>
+              <div class="preset-list entry-candidates" id="candidateList"></div>
             </div>
             <div class="grid-2">
               <label>탐색
@@ -979,12 +1000,6 @@
                     <div class="selected-box" id="selectedBox"></div>
                   </div>
                 </div>
-                <div class="band">
-                  <div class="band-head"><div class="band-title"><i data-lucide="medal"></i>검증 후보</div></div>
-                  <div class="band-body">
-                    <div class="preset-list" id="candidateList"></div>
-                  </div>
-                </div>
               </aside>
             </div>
           </section>
@@ -1046,7 +1061,7 @@
                       <label>종목 범위
                         <select id="paperUniverse">
                           <option value="symbols" selected>입력 코인</option>
-                          <option value="candidate">검증 후보</option>
+                          <option value="candidate">진입 조건 후보</option>
                         </select>
                       </label>
                     </div>
@@ -1321,7 +1336,7 @@
         hybrid:'혼합'
       });
       setOptionText('sideSelect', {BOTH:'양방향', LONG:'롱', SHORT:'숏'});
-      setOptionText('paperUniverse', {symbols:'전체 코인', candidate:'검증 후보'});
+      setOptionText('paperUniverse', {symbols:'전체 코인', candidate:'진입 조건 후보'});
       setOptionText('paperSource', {selected:'선택 후보', current:'현재 조건'});
       const scopeTitle = document.querySelector('.market-scope .candidate-top span:first-child');
       const scopePill = document.querySelector('.market-scope .pill');
@@ -2407,6 +2422,7 @@
     }
 
     function renderCandidates(){
+      if(!els.candidateList) return;
       els.candidateList.innerHTML = VALIDATED.map(c => `
         <div class="candidate" data-symbol="${c.symbol}">
           <div class="candidate-top"><span>${c.symbol}</span><span class="pill ok">${fmtPct(c.test)}</span></div>
