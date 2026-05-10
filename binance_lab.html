@@ -580,6 +580,7 @@
     }
     .pill.long{color:#8ff0c3;border-color:rgba(14,203,129,.35);background:rgba(14,203,129,.1)}
     .pill.short{color:#ff9aaa;border-color:rgba(246,70,93,.35);background:rgba(246,70,93,.1)}
+    .pill.both{color:#58dbe8;border-color:rgba(37,191,209,.4);background:rgba(37,191,209,.12)}
     .pill.ok{color:#ffd970;border-color:rgba(240,185,11,.35);background:rgba(240,185,11,.1)}
     .selected-box{
       display:grid;
@@ -990,7 +991,7 @@
                   <div class="band-head">
                     <div class="band-title"><i data-lucide="table-2"></i>결과</div>
                     <div class="top-actions">
-                      <span class="pill" id="directionSummary">롱/숏 -</span>
+                      <span class="pill" id="directionSummary">양방향/롱/숏 -</span>
                       <button id="exportBtn"><i data-lucide="download"></i>CSV</button>
                       <button id="applyToPaperBtn"><i data-lucide="send"></i>모의 적용</button>
                     </div>
@@ -1696,7 +1697,7 @@
       renderCoinCharts();
       setStatus('백테스트 실행 중', 'good');
       const paramsList = buildParamGrid(s);
-      const sides = s.side === 'BOTH' ? ['LONG','SHORT'] : [s.side];
+      const sides = s.side === 'BOTH' ? ['BOTH','LONG','SHORT'] : [s.side];
       const intervals = intervalsFor(s);
       const total = Math.max(1, s.symbols.length * intervals.length);
       let done = 0;
@@ -1919,6 +1920,25 @@
       return c.close < ind.low[i] * .9998;
     }
 
+    function entryDirection(candles, ind, i, p){
+      const longHit = entry(candles, ind, i, p, 'LONG');
+      const shortHit = entry(candles, ind, i, p, 'SHORT');
+      if(longHit && shortHit) return directionBias(candles, ind, i) >= 0 ? 'LONG' : 'SHORT';
+      if(longHit) return 'LONG';
+      if(shortHit) return 'SHORT';
+      return null;
+    }
+
+    function directionBias(candles, ind, i){
+      const c = candles[i], prev = candles[i-1];
+      if(!c || !prev || !c.close) return 0;
+      const emaGap = (ind.emaFast[i] - ind.emaSlow[i]) / c.close * 100;
+      const vwapGap = (c.close - ind.vwap[i]) / c.close * 100;
+      const bodyGap = (c.close - c.open) / c.open * 100;
+      const lastMove = (c.close - prev.close) / prev.close * 100;
+      return emaGap + vwapGap + bodyGap + lastMove;
+    }
+
     function backtest(candles, params, side, leverage, s, rangeStart, rangeEnd, collectTrades, sharedInd){
       let cash = s.capital;
       let peak = cash;
@@ -1937,28 +1957,29 @@
       const start = Math.max(warm, rangeStart);
       const end = Math.min(candles.length - 2, rangeEnd - 1);
       for(let i=start; i<end; i++){
-        if(!entry(candles, ind, i, params, side)) continue;
+        const activeSide = side === 'BOTH' ? entryDirection(candles, ind, i, params) : (entry(candles, ind, i, params, side) ? side : null);
+        if(!activeSide) continue;
         const entryBar = candles[i+1];
-        const entryPrice = side === 'LONG' ? entryBar.open * (1 + s.slipPct/100) : entryBar.open * (1 - s.slipPct/100);
+        const entryPrice = activeSide === 'LONG' ? entryBar.open * (1 + s.slipPct/100) : entryBar.open * (1 - s.slipPct/100);
         const margin = Math.min(cash * s.marginPct / 100, s.maxPosition / leverage);
         const order = Math.min(s.maxPosition, margin * leverage);
         if(margin < 5 || order < 5) continue;
-        const tp = side === 'LONG' ? entryPrice * (1 + params.tp/100) : entryPrice * (1 - params.tp/100);
-        const sl = side === 'LONG' ? entryPrice * (1 - params.sl/100) : entryPrice * (1 + params.sl/100);
+        const tp = activeSide === 'LONG' ? entryPrice * (1 + params.tp/100) : entryPrice * (1 - params.tp/100);
+        const sl = activeSide === 'LONG' ? entryPrice * (1 - params.sl/100) : entryPrice * (1 + params.sl/100);
         const liqAdversePct = liquidationAdversePct(leverage);
-        const liqPrice = side === 'LONG' ? entryPrice * (1 - liqAdversePct/100) : entryPrice * (1 + liqAdversePct/100);
+        const liqPrice = activeSide === 'LONG' ? entryPrice * (1 - liqAdversePct/100) : entryPrice * (1 + liqAdversePct/100);
         const liqBufferPct = Math.max(0, liqAdversePct - params.sl);
         if(liqBufferPct < s.minLiqBuffer) continue;
         let trailStop = sl;
         const lastExit = Math.min(candles.length - 1, rangeEnd - 1);
         const timeExitIdx = Math.min(lastExit, i + 1 + params.maxHold);
-        let exitPrice = side === 'LONG' ? candles[timeExitIdx].close * (1 - s.slipPct/100) : candles[timeExitIdx].close * (1 + s.slipPct/100);
+        let exitPrice = activeSide === 'LONG' ? candles[timeExitIdx].close * (1 - s.slipPct/100) : candles[timeExitIdx].close * (1 + s.slipPct/100);
         let exitIdx = timeExitIdx;
         let reason = 'TIME';
         let liquidated = false;
         for(let j=i+1; j<=timeExitIdx; j++){
           const c = candles[j];
-          if(side === 'LONG'){
+          if(activeSide === 'LONG'){
             const activeStop = Math.max(sl, trailStop);
             if(activeStop <= liqPrice && c.low <= liqPrice){
               exitPrice = liqPrice; exitIdx = j; reason = 'LIQ'; liquidated = true; break;
@@ -1988,14 +2009,14 @@
             }
           }
           if(s.mtmDd){
-            const closeEq = cash + order * (markRetPct(entryPrice, c.close, side) - s.feePct) / 100;
+            const closeEq = cash + order * (markRetPct(entryPrice, c.close, activeSide) - s.feePct) / 100;
             peak = Math.max(peak, closeEq);
-            const adversePrice = side === 'LONG' ? Math.max(liqPrice, c.low) : Math.min(liqPrice, c.high);
-            const worstEq = cash + order * (markRetPct(entryPrice, adversePrice, side) - s.feePct) / 100;
+            const adversePrice = activeSide === 'LONG' ? Math.max(liqPrice, c.low) : Math.min(liqPrice, c.high);
+            const worstEq = cash + order * (markRetPct(entryPrice, adversePrice, activeSide) - s.feePct) / 100;
             maxDd = Math.max(maxDd, peak ? (peak - worstEq) / peak * 100 : 0);
           }
         }
-        const rawRet = side === 'LONG' ? (exitPrice / entryPrice - 1) * 100 : (entryPrice / exitPrice - 1) * 100;
+        const rawRet = activeSide === 'LONG' ? (exitPrice / entryPrice - 1) * 100 : (entryPrice / exitPrice - 1) * 100;
         const netRet = rawRet - s.feePct;
         const pnl = liquidated ? -Math.min(cash, margin * 1.002) : order * netRet / 100;
         cash = Math.max(0, cash + pnl);
@@ -2010,7 +2031,7 @@
         if(collectTrades){
           tradeRows.push({
             entryIndex:i+1, exitIndex:exitIdx, entryTime:entryBar.time, exitTime:candles[exitIdx].time,
-            side, leverage, entry:entryPrice, exit:exitPrice, reason, pnl, netRet
+            side:activeSide, leverage, entry:entryPrice, exit:exitPrice, reason, pnl, netRet
           });
         }
         if(cash <= 0) break;
@@ -2054,10 +2075,10 @@
     function keepDirectionBalancedResults(rows, limit=240){
       const systemRows = rows.filter(r => r.system);
       const ranked = rows.filter(r => !r.system).sort(compareResults);
-      const sides = ['LONG','SHORT'].filter(side => ranked.some(r => r.side === side));
+      const sides = ['BOTH','LONG','SHORT'].filter(side => ranked.some(r => r.side === side));
       if(sides.length < 2) return [...systemRows, ...ranked].slice(0, limit);
       const keep = new Set();
-      const sideReserve = Math.min(80, Math.max(24, Math.floor(limit * .32)));
+      const sideReserve = Math.min(72, Math.max(20, Math.floor(limit / Math.max(2, sides.length))));
       sides.forEach(side => {
         ranked.filter(r => r.side === side).slice(0, sideReserve).forEach(r => keep.add(r));
       });
@@ -2099,16 +2120,19 @@
       if(!els.directionSummary) return;
       const rows = state.results.filter(r => !r.system);
       if(!rows.length){
-        els.directionSummary.textContent = '롱/숏 -';
+        els.directionSummary.textContent = '양방향/롱/숏 -';
         els.directionSummary.title = '';
         return;
       }
+      const both = rows.filter(r => r.side === 'BOTH');
       const longs = rows.filter(r => r.side === 'LONG');
       const shorts = rows.filter(r => r.side === 'SHORT');
+      const bestBoth = both.slice().sort(compareResults)[0];
       const bestLong = longs.slice().sort(compareResults)[0];
       const bestShort = shorts.slice().sort(compareResults)[0];
-      els.directionSummary.textContent = `롱 ${longs.length} · 숏 ${shorts.length}`;
+      els.directionSummary.textContent = `양방향 ${both.length} · 롱 ${longs.length} · 숏 ${shorts.length}`;
       els.directionSummary.title = [
+        bestBoth ? `양방향 최고 검증 ${fmtPct(bestBoth.test.returnPct)}` : '양방향 후보 없음',
         bestLong ? `롱 최고 검증 ${fmtPct(bestLong.test.returnPct)}` : '롱 후보 없음',
         bestShort ? `숏 최고 검증 ${fmtPct(bestShort.test.returnPct)}` : '숏 후보 없음'
       ].join(' / ');
@@ -2455,8 +2479,9 @@
     function tradeMarkers(trades, side){
       const markers = [];
       for(const t of trades || []){
-        const entryAction = side === 'SHORT' ? 'SELL' : 'BUY';
-        const exitAction = side === 'SHORT' ? 'BUY' : 'SELL';
+        const actualSide = t.side || side;
+        const entryAction = actualSide === 'SHORT' ? 'SELL' : 'BUY';
+        const exitAction = actualSide === 'SHORT' ? 'BUY' : 'SELL';
         markers.push({kind:'entry', action:entryAction, index:t.entryIndex, price:t.entry, time:t.entryTime, trade:t});
         markers.push({kind:'exit', action:exitAction, index:t.exitIndex, price:t.exit, time:t.exitTime, trade:t});
       }
