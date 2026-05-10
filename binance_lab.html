@@ -366,9 +366,14 @@
       min-width:320px;
     }
     .timeline-tools input{min-height:28px;padding:0}
+    #playTimelineBtn,
+    #stopTimelineBtn,
+    #timelineSlider{
+      display:none;
+    }
     .coin-chart-grid{
       display:grid;
-      grid-template-columns:repeat(auto-fit,minmax(230px,1fr));
+      grid-template-columns:1fr;
       gap:10px;
     }
     .coin-chart-card{
@@ -377,6 +382,10 @@
       background:#0b1114;
       overflow:hidden;
       cursor:pointer;
+    }
+    .coin-chart-card.single{
+      cursor:default;
+      min-height:430px;
     }
     .coin-chart-card:hover{border-color:var(--line2);background:#111b1f}
     .coin-chart-card.selected{border-color:rgba(37,191,209,.65);box-shadow:0 0 0 2px rgba(37,191,209,.12)}
@@ -408,6 +417,7 @@
       text-overflow:ellipsis;
     }
     .coin-chart-mini{height:132px}
+    .coin-chart-card.single .coin-chart-mini{height:380px}
     .small-chart{height:170px}
     .table-wrap{
       overflow:auto;
@@ -812,6 +822,7 @@
                   <div class="band-head">
                     <div class="band-title"><i data-lucide="candlestick-chart"></i>코인별 차트</div>
                     <div class="timeline-tools">
+                      <select id="coinChartSelect"></select>
                       <button id="playTimelineBtn" type="button"><i data-lucide="play"></i>재생</button>
                       <button id="stopTimelineBtn" type="button"><i data-lucide="pause"></i>정지</button>
                       <input id="timelineSlider" type="range" min="0" max="100" value="100" />
@@ -1005,6 +1016,7 @@
       scanRows:[],
       cache:new Map(),
       coinBest:[],
+      chartSymbol:null,
       serverPaper:{
         available:false,
         mode:'none',
@@ -1094,9 +1106,13 @@
       els.paperResetBtn.addEventListener('click', resetPaper);
       els.scanBtn.addEventListener('click', scanSignals);
       els.copyReportBtn.addEventListener('click', copyReport);
-      els.playTimelineBtn.addEventListener('click', startTimeline);
-      els.stopTimelineBtn.addEventListener('click', stopTimeline);
-      els.timelineSlider.addEventListener('input', () => setTimeline(number(els.timelineSlider.value, 100)));
+      els.playTimelineBtn?.addEventListener('click', startTimeline);
+      els.stopTimelineBtn?.addEventListener('click', stopTimeline);
+      els.timelineSlider?.addEventListener('input', () => setTimeline(number(els.timelineSlider.value, 100)));
+      els.coinChartSelect?.addEventListener('change', () => {
+        state.chartSymbol = els.coinChartSelect.value;
+        renderCoinCharts();
+      });
     }
 
     function populateSymbolSelect(){
@@ -1621,6 +1637,7 @@
       const row = state.results[index];
       if(!row || row.system) return;
       state.selected = row;
+      state.chartSymbol = row.symbol;
       renderResultTable();
       renderDashboard();
       renderSelected(row);
@@ -1759,6 +1776,195 @@
       if(els.timelineSlider) els.timelineSlider.value = String(Math.round(state.playback.progress));
       if(els.timelineLabel) els.timelineLabel.textContent = `${Math.round(state.playback.progress)}%`;
       if(redraw) drawCoinCharts();
+    }
+
+    function renderCoinCharts(){
+      if(!els.coinChartGrid) return;
+      const symbols = currentSymbols();
+      const bestBySymbol = new Map();
+      for(const row of state.results){
+        if(row.system) continue;
+        const current = bestBySymbol.get(row.symbol);
+        if(!current || sortResults([row, current])[0] === row) bestBySymbol.set(row.symbol, row);
+      }
+      state.coinBest = symbols.map(symbol => ({symbol, row:bestBySymbol.get(symbol) || null}));
+      const preferred = state.chartSymbol || state.selected?.symbol || state.coinBest.find(item => item.row)?.symbol || symbols[0] || '';
+      state.chartSymbol = symbols.includes(preferred) ? preferred : (symbols[0] || '');
+      if(els.coinChartSelect){
+        els.coinChartSelect.innerHTML = symbols.map(sym => `<option value="${sym}">${sym}</option>`).join('');
+        els.coinChartSelect.value = state.chartSymbol;
+      }
+      const item = state.coinBest.find(x => x.symbol === state.chartSymbol) || {symbol:state.chartSymbol, row:null};
+      const row = item.row;
+      const summary = row ? yesterdayTradeSummary(row.all.tradeRows || [], row.side) : {buy:0, sell:0};
+      els.coinChartGrid.innerHTML = `<div class="coin-chart-card single${row && state.selected === row ? ' selected' : ''}">
+        <div class="coin-chart-head">
+          <div class="coin-chart-title">
+            <strong>${item.symbol || '-'}</strong>
+            <span>${row ? `${row.interval} ${row.side} ${row.leverage}x ${strategyName(row.params)} · 어제 B ${summary.buy} / S ${summary.sell}` : '백테스트 후 캔들 위에 B/S 마커 표시'}</span>
+          </div>
+          <span class="pill ${row && row.test.returnPct >= 0 ? 'ok' : ''}">${row ? fmtPct(row.test.returnPct) : '-'}</span>
+        </div>
+        <div class="coin-chart-mini"><canvas class="coin-canvas" data-symbol="${item.symbol || ''}"></canvas></div>
+      </div>`;
+      if(row){
+        const idx = state.results.indexOf(row);
+        if(idx >= 0 && state.selected !== row){
+          els.coinChartGrid.querySelector('.coin-chart-card')?.addEventListener('click', () => selectResult(idx));
+        }
+      }
+      drawCoinCharts();
+      if(window.lucide) lucide.createIcons();
+    }
+
+    function drawCoinCharts(){
+      if(!els.coinChartGrid) return;
+      const canvas = els.coinChartGrid.querySelector('.coin-canvas');
+      if(!canvas) return;
+      const item = state.coinBest.find(x => x.symbol === state.chartSymbol);
+      const rect = canvas.parentElement.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = Math.max(10, Math.floor(rect.width * dpr));
+      canvas.height = Math.max(10, Math.floor(rect.height * dpr));
+      if(!item?.row){
+        const ctx = canvas.getContext('2d');
+        drawGrid(ctx, canvas.width, canvas.height);
+        drawEmpty(ctx, canvas.width, canvas.height, 'Run backtest to show candles');
+        return;
+      }
+      drawCandleTrades(canvas, cachedCandlesForRow(item.row), item.row);
+    }
+
+    function cachedCandlesForRow(row){
+      const exact = `${row.symbol}|${row.interval}|${row.candleCount}|${readSettings().dataMode}`;
+      if(state.cache.has(exact)) return state.cache.get(exact);
+      const prefix = `${row.symbol}|${row.interval}|${row.candleCount}|`;
+      for(const [key, candles] of state.cache.entries()){
+        if(key.startsWith(prefix)) return candles;
+      }
+      for(const [key, candles] of state.cache.entries()){
+        if(key.startsWith(`${row.symbol}|${row.interval}|`)) return candles;
+      }
+      return [];
+    }
+
+    function yesterdayTradeSummary(trades, side){
+      return tradeMarkers(trades, side).reduce((acc, marker) => {
+        if(isYesterday(marker.time)) acc[marker.action === 'BUY' ? 'buy' : 'sell']++;
+        return acc;
+      }, {buy:0, sell:0});
+    }
+
+    function isYesterday(time){
+      if(!time) return false;
+      const d = new Date(time);
+      const y = new Date();
+      y.setDate(y.getDate() - 1);
+      return d.getFullYear() === y.getFullYear() && d.getMonth() === y.getMonth() && d.getDate() === y.getDate();
+    }
+
+    function tradeMarkers(trades, side){
+      const markers = [];
+      for(const t of trades || []){
+        const entryAction = side === 'SHORT' ? 'SELL' : 'BUY';
+        const exitAction = side === 'SHORT' ? 'BUY' : 'SELL';
+        markers.push({kind:'entry', action:entryAction, index:t.entryIndex, price:t.entry, time:t.entryTime, trade:t});
+        markers.push({kind:'exit', action:exitAction, index:t.exitIndex, price:t.exit, time:t.exitTime, trade:t});
+      }
+      return markers.filter(m => Number.isFinite(m.index) && Number.isFinite(m.price));
+    }
+
+    function drawCandleTrades(canvas, candles, row){
+      const ctx = canvas.getContext('2d');
+      const w = canvas.width, h = canvas.height;
+      ctx.clearRect(0,0,w,h);
+      drawGrid(ctx,w,h);
+      if(!candles || candles.length < 2){
+        drawEmpty(ctx,w,h,'No candle cache');
+        return;
+      }
+      const maxBars = Math.min(260, candles.length);
+      const start = Math.max(0, candles.length - maxBars);
+      const view = candles.slice(start);
+      const padL = 54, padR = 14, padT = 24, padB = 34;
+      const plotW = Math.max(10, w - padL - padR);
+      const plotH = Math.max(10, h - padT - padB);
+      let lo = Math.min(...view.map(c => c.low));
+      let hi = Math.max(...view.map(c => c.high));
+      const markers = tradeMarkers(row.all.tradeRows || [], row.side);
+      const visibleMarkers = markers.filter(m => m.index >= start && m.index < candles.length);
+      visibleMarkers.forEach(m => { lo = Math.min(lo, m.price); hi = Math.max(hi, m.price); });
+      const span = Math.max(1e-9, hi - lo);
+      lo -= span * .10;
+      hi += span * .10;
+      const yOf = price => padT + (1 - (price - lo) / (hi - lo)) * plotH;
+      const xOfIndex = index => padL + (index - start + .5) / view.length * plotW;
+      ctx.fillStyle = '#95a4a8';
+      ctx.font = `${Math.max(10, Math.floor(h*.032))}px system-ui`;
+      for(let i=0;i<=4;i++){
+        const price = lo + (hi-lo) * i / 4;
+        const y = yOf(price);
+        ctx.fillText(fmtNum(price), 6, y + 4);
+      }
+      const cw = plotW / view.length;
+      view.forEach((c, i) => {
+        const x = padL + (i + .5) * cw;
+        const up = c.close >= c.open;
+        ctx.strokeStyle = up ? '#0ecb81' : '#f6465d';
+        ctx.fillStyle = up ? '#0ecb81' : '#f6465d';
+        ctx.lineWidth = Math.max(1, Math.floor(w/900));
+        ctx.beginPath();
+        ctx.moveTo(x, yOf(c.high));
+        ctx.lineTo(x, yOf(c.low));
+        ctx.stroke();
+        const yo = yOf(c.open), yc = yOf(c.close);
+        const top = Math.min(yo, yc);
+        const bodyH = Math.max(2, Math.abs(yc - yo));
+        ctx.fillRect(x - Math.max(1, cw*.32), top, Math.max(2, cw*.64), bodyH);
+      });
+      const pairedTrades = (row.all.tradeRows || []).filter(t => t.exitIndex >= start && t.entryIndex < candles.length);
+      pairedTrades.forEach(t => {
+        const ex = xOfIndex(t.entryIndex);
+        const sx = xOfIndex(t.exitIndex);
+        if(ex < padL || sx > w-padR) return;
+        ctx.strokeStyle = t.pnl >= 0 ? 'rgba(14,203,129,.45)' : 'rgba(246,70,93,.45)';
+        ctx.setLineDash([4,4]);
+        ctx.beginPath();
+        ctx.moveTo(ex, yOf(t.entry));
+        ctx.lineTo(sx, yOf(t.exit));
+        ctx.stroke();
+        ctx.setLineDash([]);
+      });
+      visibleMarkers.forEach(marker => {
+        const x = xOfIndex(marker.index);
+        const y = yOf(marker.price);
+        const buy = marker.action === 'BUY';
+        const color = buy ? '#0ecb81' : '#f6465d';
+        ctx.fillStyle = buy ? 'rgba(14,203,129,.14)' : 'rgba(246,70,93,.14)';
+        ctx.fillRect(x - Math.max(2, cw*.42), padT, Math.max(3, cw*.84), plotH);
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(x, y, 10, 0, Math.PI*2);
+        ctx.fill();
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(x, y, 8, 0, Math.PI*2);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.font = `bold ${Math.max(10, Math.floor(h*.035))}px system-ui`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(buy ? 'B' : 'S', x, y + .5);
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
+      });
+      const summary = yesterdayTradeSummary(row.all.tradeRows || [], row.side);
+      drawLabel(ctx,w,h,`${row.symbol} ${row.interval} · B/S markers · yesterday B ${summary.buy} S ${summary.sell}`);
+      ctx.fillStyle = '#95a4a8';
+      ctx.font = `${Math.max(10, Math.floor(h*.03))}px system-ui`;
+      ctx.textAlign = 'right';
+      ctx.fillText(`${view.length} candles · ${visibleMarkers.length}/${markers.length} markers`, w - 12, h - 12);
+      ctx.textAlign = 'left';
     }
 
     function renderCandidates(){
