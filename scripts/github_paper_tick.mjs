@@ -33,14 +33,30 @@ const DEFAULT_SETTINGS = {
   capital: 3000,
   leverage: 3,
   feePct: 0.08,
+  slipPct: 0.02,
+  spreadPct: 0.04,
+  funding8hPct: 0.01,
   marginPct: 14,
   maxPosition: 900,
   maxPositions: 4,
-  minScore: 4.35,
+  minScore: 1.0,
   maxHoldMinutes: 360,
   intervals: ['3m', '5m', '15m'],
   candleLimit: 260,
-  scanSymbolLimit: 0
+  scanSymbolLimit: 0,
+  fast: 8,
+  slow: 21,
+  pulse: 1.35,
+  vwapLen: 96,
+  breakout: 14,
+  minAtr: 0.04,
+  maxAtr: 4.2,
+  tpPct: 2.8,
+  slPct: 0.75,
+  trailPct: 0.35,
+  stopSlipMult: 1.35,
+  maxDailyLossPct: 2,
+  maxSameSidePositions: 2
 };
 
 const now = Date.now();
@@ -101,13 +117,29 @@ function readSettings(previous = {}){
     capital: number(process.env.PAPER_CAPITAL, previous.capital ?? DEFAULT_SETTINGS.capital),
     leverage: number(process.env.PAPER_LEVERAGE, previous.leverage ?? DEFAULT_SETTINGS.leverage),
     feePct: number(process.env.PAPER_FEE_PCT, previous.feePct ?? DEFAULT_SETTINGS.feePct),
+    slipPct: number(process.env.PAPER_SLIP_PCT, previous.slipPct ?? DEFAULT_SETTINGS.slipPct),
+    spreadPct: number(process.env.PAPER_SPREAD_PCT, previous.spreadPct ?? DEFAULT_SETTINGS.spreadPct),
+    funding8hPct: number(process.env.PAPER_FUNDING_8H_PCT, previous.funding8hPct ?? DEFAULT_SETTINGS.funding8hPct),
     marginPct: number(process.env.PAPER_MARGIN_PCT, previous.marginPct ?? DEFAULT_SETTINGS.marginPct),
     maxPosition: number(process.env.PAPER_MAX_POSITION, previous.maxPosition ?? DEFAULT_SETTINGS.maxPosition),
     maxPositions: Math.floor(number(process.env.PAPER_MAX_POSITIONS, previous.maxPositions ?? DEFAULT_SETTINGS.maxPositions)),
-    minScore: number(process.env.PAPER_MIN_SCORE, previous.minScore ?? DEFAULT_SETTINGS.minScore),
+    minScore: number(process.env.PAPER_MIN_SCORE, DEFAULT_SETTINGS.minScore),
     maxHoldMinutes: number(process.env.PAPER_MAX_HOLD_MINUTES, previous.maxHoldMinutes ?? DEFAULT_SETTINGS.maxHoldMinutes),
     candleLimit: Math.floor(number(process.env.PAPER_KLINES, previous.candleLimit ?? DEFAULT_SETTINGS.candleLimit)),
     scanSymbolLimit: Math.floor(number(process.env.PAPER_SCAN_SYMBOL_LIMIT, previous.scanSymbolLimit ?? DEFAULT_SETTINGS.scanSymbolLimit)),
+    fast: Math.floor(number(process.env.PAPER_FAST_EMA, previous.fast ?? DEFAULT_SETTINGS.fast)),
+    slow: Math.floor(number(process.env.PAPER_SLOW_EMA, previous.slow ?? DEFAULT_SETTINGS.slow)),
+    pulse: number(process.env.PAPER_PULSE, previous.pulse ?? DEFAULT_SETTINGS.pulse),
+    vwapLen: Math.floor(number(process.env.PAPER_VWAP_LEN, previous.vwapLen ?? DEFAULT_SETTINGS.vwapLen)),
+    breakout: Math.floor(number(process.env.PAPER_BREAKOUT, previous.breakout ?? DEFAULT_SETTINGS.breakout)),
+    minAtr: number(process.env.PAPER_MIN_ATR, previous.minAtr ?? DEFAULT_SETTINGS.minAtr),
+    maxAtr: number(process.env.PAPER_MAX_ATR, previous.maxAtr ?? DEFAULT_SETTINGS.maxAtr),
+    tpPct: number(process.env.PAPER_TP_PCT, previous.tpPct ?? DEFAULT_SETTINGS.tpPct),
+    slPct: number(process.env.PAPER_SL_PCT, previous.slPct ?? DEFAULT_SETTINGS.slPct),
+    trailPct: number(process.env.PAPER_TRAIL_PCT, previous.trailPct ?? DEFAULT_SETTINGS.trailPct),
+    stopSlipMult: number(process.env.PAPER_STOP_SLIP_MULT, previous.stopSlipMult ?? DEFAULT_SETTINGS.stopSlipMult),
+    maxDailyLossPct: number(process.env.PAPER_MAX_DAILY_LOSS_PCT, previous.maxDailyLossPct ?? DEFAULT_SETTINGS.maxDailyLossPct),
+    maxSameSidePositions: Math.floor(number(process.env.PAPER_MAX_SAME_SIDE_POSITIONS, previous.maxSameSidePositions ?? DEFAULT_SETTINGS.maxSameSidePositions)),
     intervals
   };
 }
@@ -264,7 +296,9 @@ async function fetchKlines(symbol, interval, limit){
         high: Number(r[2]),
         low: Number(r[3]),
         close: Number(r[4]),
-        volume: Number(r[5])
+        volume: Number(r[5]),
+        quoteVolume: Number(r[7]),
+        takerBuyQuote: Number(r[10])
       }));
     }catch(error){
       failures.push(`${hostLabel(base)} ${error.message || String(error)}`);
@@ -294,14 +328,15 @@ function updateOpenPositions(state, market){
     pos.mark = candle.close;
     trailPosition(pos, candles);
 
+    const hitLiq = pos.liq ? (pos.side === 'LONG' ? candle.low <= pos.liq : candle.high >= pos.liq) : false;
     const hitTp = pos.side === 'LONG' ? candle.high >= pos.tp : candle.low <= pos.tp;
     const hitSl = pos.side === 'LONG' ? candle.low <= pos.sl : candle.high >= pos.sl;
     const ageMinutes = (now - (pos.openedAt || now)) / 60000;
     const timedOut = ageMinutes >= settings.maxHoldMinutes;
 
-    if(hitSl || hitTp || timedOut){
-      const reason = hitSl ? 'SL' : hitTp ? 'TP' : 'TIME';
-      const exit = hitSl ? pos.sl : hitTp ? pos.tp : candle.close;
+    if(hitLiq || hitSl || hitTp || timedOut){
+      const reason = hitLiq ? 'LIQ' : hitSl ? 'SL' : hitTp ? 'TP' : 'TIME';
+      const exit = hitLiq ? pos.liq : hitSl ? pos.sl : hitTp ? pos.tp : candle.close;
       closePosition(state, pos, exit, reason);
     }else{
       remaining.push(pos);
@@ -316,6 +351,10 @@ function bestCandlesForPosition(market, pos){
 
 function openNewPositions(state, market){
   const settings = state.settings;
+  if(equityNow(state) <= state.initial * (1 - settings.maxDailyLossPct / 100)){
+    state.errors.unshift(`[risk] daily loss guard: equity below -${settings.maxDailyLossPct}%`);
+    return;
+  }
   const openSymbols = new Set(state.positions.map(p => p.symbol));
   const capacity = Math.max(0, settings.maxPositions - state.positions.length);
   if(!capacity) return;
@@ -325,65 +364,34 @@ function openNewPositions(state, market){
     if(openSymbols.has(symbol)) continue;
     let best = null;
     for(const [interval, candles] of intervals.entries()){
-      const signal = scoreSignal(symbol, interval, candles);
+      const signal = scoreSignal(symbol, interval, candles, settings);
       if(signal && (!best || signal.score > best.score)) best = signal;
     }
     if(best && best.score >= settings.minScore) candidates.push(best);
   }
 
   candidates.sort((a,b) => b.score - a.score);
-  for(const signal of candidates.slice(0, capacity)) openPosition(state, signal);
+  for(const signal of candidates){
+    if(state.positions.length >= settings.maxPositions) break;
+    if(state.positions.filter(p => p.side === signal.side).length >= settings.maxSameSidePositions) continue;
+    openPosition(state, signal);
+  }
 }
 
-function scoreSignal(symbol, interval, candles){
+function scoreSignal(symbol, interval, candles, settings){
   const c = closedCandles(candles);
-  if(c.length < 80) return null;
-  const close = c.map(x => x.close);
-  const high = c.map(x => x.high);
-  const low = c.map(x => x.low);
-  const volume = c.map(x => x.volume);
+  const warm = Math.max(settings.slow + 2, settings.vwapLen + 2, settings.breakout + 2, 80);
+  if(c.length < warm + 2) return null;
+  const ind = indicators(c, settings);
+  const i = c.length - 1;
+  const side = entryDirection(c, ind, i, settings);
+  if(!side) return null;
   const last = c.at(-1);
-  const prev = c.at(-2);
-  const ema20 = ema(close, 20);
-  const ema50 = ema(close, 50);
-  const r = rsi(close, 14);
-  const a = atr(c, 14);
-  const avgVol = sma(volume.slice(-30));
-  const atrPct = a / last.close * 100;
-  if(!Number.isFinite(atrPct) || atrPct < 0.22 || atrPct > 4.8) return null;
-
-  const recentHigh = Math.max(...high.slice(-18, -1));
-  const recentLow = Math.min(...low.slice(-18, -1));
-  const volPulse = avgVol ? last.volume / avgVol : 1;
-  const slope20 = ema20.at(-1) - ema20.at(-6);
-  const trendLong = last.close > ema50.at(-1) && ema20.at(-1) > ema50.at(-1);
-  const trendShort = last.close < ema50.at(-1) && ema20.at(-1) < ema50.at(-1);
-
-  let longScore = 0;
-  if(trendLong) longScore += 1.25;
-  if(last.close > ema20.at(-1)) longScore += 0.8;
-  if(slope20 > 0) longScore += 0.65;
-  if(r >= 45 && r <= 67) longScore += 0.95;
-  if(last.low <= ema20.at(-1) * 1.004 && last.close > prev.close) longScore += 0.7;
-  if(last.close > recentHigh) longScore += 0.95;
-  if(volPulse >= 0.9) longScore += Math.min(0.7, (volPulse - 0.9) * 0.55 + 0.25);
-  if(atrPct >= 0.35 && atrPct <= 2.9) longScore += 0.45;
-
-  let shortScore = 0;
-  if(trendShort) shortScore += 1.25;
-  if(last.close < ema20.at(-1)) shortScore += 0.8;
-  if(slope20 < 0) shortScore += 0.65;
-  if(r >= 33 && r <= 55) shortScore += 0.95;
-  if(last.high >= ema20.at(-1) * 0.996 && last.close < prev.close) shortScore += 0.7;
-  if(last.close < recentLow) shortScore += 0.95;
-  if(volPulse >= 0.9) shortScore += Math.min(0.7, (volPulse - 0.9) * 0.55 + 0.25);
-  if(atrPct >= 0.35 && atrPct <= 2.9) shortScore += 0.45;
-
-  const side = longScore >= shortScore ? 'LONG' : 'SHORT';
-  const score = Math.max(longScore, shortScore);
+  const score = signalScore(c, ind, i, settings, side);
+  if(score < settings.minScore) return null;
   const entry = last.close;
-  const stopDistance = Math.max(a * 1.15, entry * 0.0045);
-  const takeDistance = Math.max(a * 1.85, entry * 0.0075);
+  const tp = side === 'LONG' ? entry * (1 + settings.tpPct / 100) : entry * (1 - settings.tpPct / 100);
+  const sl = side === 'LONG' ? entry * (1 - settings.slPct / 100) : entry * (1 + settings.slPct / 100);
   return {
     symbol,
     interval,
@@ -391,11 +399,12 @@ function scoreSignal(symbol, interval, candles){
     score,
     entry,
     mark: entry,
-    atr: a,
-    atrPct,
-    tp: side === 'LONG' ? entry + takeDistance : entry - takeDistance,
-    sl: side === 'LONG' ? entry - stopDistance : entry + stopDistance,
-    reason: `${interval} score ${score.toFixed(2)} rsi ${r.toFixed(1)} atr ${atrPct.toFixed(2)}%`
+    atr: ind.atr[i],
+    atrPct: ind.atr[i] / entry * 100,
+    tp,
+    sl,
+    trailPct: settings.trailPct,
+    reason: `${interval} shared-strategy score ${score.toFixed(2)}`
   };
 }
 
@@ -405,23 +414,30 @@ function openPosition(state, signal){
   const order = Math.min(settings.maxPosition, equity * settings.marginPct / 100 * settings.leverage);
   if(order < 10) return;
   const margin = order / settings.leverage;
+  if(state.cash < margin) return;
+  const entry = entryFillPrice(signal.entry, signal.side, settings);
+  const liqAdverse = liquidationAdversePct(settings.leverage);
   const pos = {
     id: `${signal.symbol}-${signal.interval}-${now}`,
     symbol: signal.symbol,
     interval: signal.interval,
     side: signal.side,
     leverage: settings.leverage,
-    entry: signal.entry,
+    entry,
     mark: signal.entry,
     margin,
     order,
-    tp: signal.tp,
-    sl: signal.sl,
+    tp: signal.side === 'LONG' ? entry * (1 + settings.tpPct / 100) : entry * (1 - settings.tpPct / 100),
+    sl: signal.side === 'LONG' ? entry * (1 - settings.slPct / 100) : entry * (1 + settings.slPct / 100),
+    liq: signal.side === 'LONG' ? entry * (1 - liqAdverse / 100) : entry * (1 + liqAdverse / 100),
     openedAt: now,
     score: signal.score,
-    strategy: 'Actions auto-scan',
+    marginReserved: true,
+    trailPct: settings.trailPct,
+    strategy: 'Shared EMA/VWAP/ATR',
     reason: signal.reason
   };
+  state.cash = Math.max(0, state.cash - margin);
   state.positions.push(pos);
   state.journal.unshift({
     time: now,
@@ -435,15 +451,17 @@ function openPosition(state, signal){
 }
 
 function closePosition(state, pos, price, reason){
-  const ret = markRetPct(pos.entry, price, pos.side) - state.settings.feePct;
-  const pnl = pos.order * ret / 100;
-  state.cash = Math.max(0, state.cash + pnl);
+  const exit = reason === 'LIQ' ? price : exitFillPrice(price, pos.side, state.settings, reason === 'SL' ? state.settings.stopSlipMult : 1);
+  const ret = markRetPct(pos.entry, exit, pos.side) - state.settings.feePct - fundingCostPct(pos.openedAt, now, state.settings);
+  const pnl = reason === 'LIQ' ? -Math.min(pos.margin, pos.margin * 1.002) : pos.order * ret / 100;
+  const release = pos.marginReserved ? pos.margin : 0;
+  state.cash = Math.max(0, state.cash + release + pnl);
   state.journal.unshift({
     time: now,
     symbol: pos.symbol,
     side: pos.side,
     action: 'CLOSE',
-    price,
+    price: exit,
     pnl,
     ret,
     reason
@@ -471,7 +489,7 @@ function markEquity(state){
 function equityNow(state){
   return state.cash + state.positions.reduce((sum, pos) => {
     const ret = markRetPct(pos.entry, pos.mark || pos.entry, pos.side) - state.settings.feePct;
-    return sum + pos.order * ret / 100;
+    return sum + (pos.marginReserved ? pos.margin : 0) + pos.order * ret / 100;
   }, 0);
 }
 
@@ -642,6 +660,81 @@ function closedCandles(candles){
   return candles.length > 2 ? candles.slice(0, -1) : candles;
 }
 
+function indicators(candles, p){
+  const closes = candles.map(c => c.close);
+  return {
+    emaFast: ema(closes, p.fast),
+    emaSlow: ema(closes, p.slow),
+    atr: atrSeries(candles, 14),
+    vwap: rollingVWAP(candles, p.vwapLen),
+    avgQuote: rollingAvg(candles.map(c => c.quoteVolume || c.volume * c.close), 20),
+    high: rollingHigh(candles.map(c => c.high), p.breakout),
+    low: rollingLow(candles.map(c => c.low), p.breakout)
+  };
+}
+
+function entry(candles, ind, i, p, side){
+  const c = candles[i], prev = candles[i - 1];
+  if(!c || !prev) return false;
+  const quote = c.quoteVolume || c.volume * c.close;
+  const takerBuy = c.takerBuyQuote || quote * .5;
+  const atrPct = c.close ? ind.atr[i] / c.close * 100 : 0;
+  const pulse = ind.avgQuote[i - 1] ? quote / ind.avgQuote[i - 1] : 1;
+  const buyRatio = quote ? takerBuy / quote : .5;
+  const longTrend = c.close > ind.emaFast[i] && ind.emaFast[i] > ind.emaSlow[i] && c.close > ind.vwap[i];
+  const shortTrend = c.close < ind.emaFast[i] && ind.emaFast[i] < ind.emaSlow[i] && c.close < ind.vwap[i];
+  const baseOk = pulse >= p.pulse && atrPct >= p.minAtr && atrPct <= p.maxAtr;
+  if(side === 'LONG'){
+    if(!baseOk || !longTrend || buyRatio < .50 || c.close <= c.open) return false;
+    if(prev.low <= ind.emaFast[i - 1] * 1.002 && c.close > ind.emaFast[i]) return true;
+    return c.close > ind.high[i - 1] * 1.0002 && closeNearHigh(c);
+  }
+  if(!baseOk || !shortTrend || buyRatio > .50 || c.close >= c.open) return false;
+  if(prev.high >= ind.emaFast[i - 1] * .998 && c.close < ind.emaFast[i]) return true;
+  return c.close < ind.low[i - 1] * .9998 && closeNearLow(c);
+}
+
+function entryDirection(candles, ind, i, p){
+  const longHit = entry(candles, ind, i, p, 'LONG');
+  const shortHit = entry(candles, ind, i, p, 'SHORT');
+  if(longHit && shortHit) return directionBias(candles, ind, i) >= 0 ? 'LONG' : 'SHORT';
+  return longHit ? 'LONG' : shortHit ? 'SHORT' : null;
+}
+
+function directionBias(candles, ind, i){
+  const c = candles[i], prev = candles[i - 1];
+  if(!c || !prev || !c.close) return 0;
+  return (ind.emaFast[i] - ind.emaSlow[i]) / c.close * 100 +
+    (c.close - ind.vwap[i]) / c.close * 100 +
+    (c.close - c.open) / c.open * 100 +
+    (c.close - prev.close) / prev.close * 100;
+}
+
+function signalScore(candles, ind, i, p, side){
+  const c = candles[i];
+  const quote = c.quoteVolume || c.volume * c.close;
+  const pulse = ind.avgQuote[i - 1] ? quote / ind.avgQuote[i - 1] : 1;
+  const atrPct = c.close ? ind.atr[i] / c.close * 100 : 0;
+  const trendGap = Math.abs(ind.emaFast[i] - ind.emaSlow[i]) / c.close * 100;
+  const vwapGap = Math.abs(c.close - ind.vwap[i]) / c.close * 100;
+  return 1 + Math.min(2, pulse / Math.max(.01, p.pulse)) + Math.min(1.5, atrPct) + Math.min(1, trendGap + vwapGap) + (side === 'LONG' ? .05 : 0);
+}
+
+function executionHalfSpreadPct(settings){ return Math.max(0, number(settings.spreadPct, 0)) / 2; }
+function entryFillPrice(price, side, settings){
+  const cost = (Math.max(0, number(settings.slipPct, 0)) + executionHalfSpreadPct(settings)) / 100;
+  return side === 'LONG' ? price * (1 + cost) : price * (1 - cost);
+}
+function exitFillPrice(price, side, settings, slipMult = 1){
+  const cost = (Math.max(0, number(settings.slipPct, 0)) * Math.max(1, slipMult) + executionHalfSpreadPct(settings)) / 100;
+  return side === 'LONG' ? price * (1 - cost) : price * (1 + cost);
+}
+function fundingCostPct(entryTime, exitTime, settings){
+  const hours = Math.max(0, (Number(exitTime) || 0) - (Number(entryTime) || 0)) / 3600000;
+  return hours / 8 * Math.max(0, number(settings.funding8hPct, 0));
+}
+function liquidationAdversePct(leverage){ return Math.max(.05, 100 / Math.max(1, leverage) - .85); }
+
 function markRetPct(entry, price, side){
   const raw = (price / entry - 1) * 100;
   return side === 'SHORT' ? -raw : raw;
@@ -681,10 +774,57 @@ function atr(candles, period){
   return sma(trs.slice(-period));
 }
 
+function atrSeries(candles, period){
+  const out = [];
+  for(let i = 0; i < candles.length; i++){
+    if(i === 0){ out.push(0); continue; }
+    const start = Math.max(1, i - period + 1);
+    const trs = [];
+    for(let j = start; j <= i; j++){
+      const c = candles[j];
+      const p = candles[j - 1];
+      trs.push(Math.max(c.high - c.low, Math.abs(c.high - p.close), Math.abs(c.low - p.close)));
+    }
+    out.push(sma(trs));
+  }
+  return out;
+}
+
+function rollingAvg(values, len){
+  const out = [];
+  let sum = 0;
+  for(let i = 0; i < values.length; i++){
+    sum += values[i] || 0;
+    if(i >= len) sum -= values[i - len] || 0;
+    out.push(sum / Math.min(len, i + 1));
+  }
+  return out;
+}
+
+function rollingHigh(values, len){
+  return values.map((_, i) => Math.max(...values.slice(Math.max(0, i - len + 1), i + 1)));
+}
+
+function rollingLow(values, len){
+  return values.map((_, i) => Math.min(...values.slice(Math.max(0, i - len + 1), i + 1)));
+}
+
+function rollingVWAP(candles, len){
+  return candles.map((_, i) => {
+    const rows = candles.slice(Math.max(0, i - len + 1), i + 1);
+    const vol = rows.reduce((s,c) => s + (c.volume || 0), 0);
+    if(!vol) return candles[i].close;
+    return rows.reduce((s,c) => s + ((c.high + c.low + c.close) / 3) * (c.volume || 0), 0) / vol;
+  });
+}
+
 function sma(values){
   if(!values.length) return 0;
   return values.reduce((s,x) => s + x, 0) / values.length;
 }
+
+function closeNearHigh(c){ return (c.high - c.close) / Math.max(1e-9, c.high - c.low) <= .25; }
+function closeNearLow(c){ return (c.close - c.low) / Math.max(1e-9, c.high - c.low) <= .25; }
 
 function number(value, fallback){
   const n = Number(value);

@@ -889,6 +889,10 @@
               <label>슬리피지 %<input id="slipPct" type="number" step="0.01" value="0.02" /></label>
             </div>
             <div class="grid-2">
+              <label>스프레드 스트레스 %<input id="spreadPct" type="number" step="0.01" value="0.04" /></label>
+              <label>펀딩 스트레스 8시간 %<input id="funding8hPct" type="number" step="0.005" value="0.01" /></label>
+            </div>
+            <div class="grid-2">
               <label>손절 슬립 배수<input id="stopSlipMult" type="number" step="0.05" value="1.35" /></label>
               <label>최소 청산 버퍼<input id="liqBuffer" type="number" step="0.05" value="0.45" /></label>
             </div>
@@ -1004,7 +1008,7 @@
                         <thead>
                           <tr>
                             <th>#</th><th>코인</th><th>분봉</th><th>방향</th><th>전략</th><th>레버리지</th>
-                            <th>전체 수익률</th><th>검증 수익률</th><th>최대 낙폭</th><th>거래</th><th>승률</th><th>수익 팩터</th><th>청산</th><th>점수</th>
+                            <th>전체 수익률</th><th>검증 수익률</th><th>최종 수익률</th><th>최대 낙폭</th><th>거래</th><th>승률</th><th>수익 팩터</th><th>청산</th><th>점수</th>
                           </tr>
                         </thead>
                         <tbody id="resultBody"></tbody>
@@ -1628,6 +1632,8 @@
         maxHold: number(els.maxHold.value, 24),
         feePct: number(els.feePct.value, .08),
         slipPct: number(els.slipPct.value, .02),
+        spreadPct: number(els.spreadPct.value, .04),
+        funding8hPct: number(els.funding8hPct.value, .01),
         stopSlipMult: number(els.stopSlipMult.value, 1.35),
         minLiqBuffer: number(els.liqBuffer.value, .45),
         maxDd: number(els.maxDd.value, 35),
@@ -1649,7 +1655,7 @@
       const ids = [
         'presetSelect','symbolsInput','intervalSelect','candleCount','dataMode','modeSelect','sideSelect','gridSelect','comboLimit',
         'fastEma','slowEma','pulse','vwapLen','breakoutLen','minAtr','maxAtr','cooldown','leverages','marginPct','capital',
-        'maxPosition','tpPct','slPct','trailPct','maxHold','feePct','slipPct','stopSlipMult','liqBuffer','maxDd','minPf',
+        'maxPosition','tpPct','slPct','trailPct','maxHold','feePct','slipPct','spreadPct','funding8hPct','stopSlipMult','liqBuffer','maxDd','minPf',
         'minTrades','rejectLiq','mtmDd','saveJournal','paperTickSec','paperMaxOpen','paperSource','paperUniverse',
         'paperAutoClose','paperNoDuplicate'
       ];
@@ -1718,18 +1724,20 @@
               continue;
             }
             setStatus(`${symbol} ${interval} 조건 평가 중`, 'good');
-            const split = Math.floor(candles.length * .62);
+            const splitTrain = Math.floor(candles.length * .55);
+            const splitValidation = Math.floor(candles.length * .78);
             let checked = 0;
             for(const params of paramsList){
               const ind = indicators(candles, params);
               for(const side of sides){
                 for(const lev of s.leverages){
                   if(state.cancel) break;
-                  const train = backtest(candles, params, side, lev, s, 0, split, false, ind);
+                  const train = backtest(candles, params, side, lev, s, 0, splitTrain, false, ind);
                   if(train.trades < Math.max(2, Math.floor(s.minTrades * .35))) continue;
-                  const test = backtest(candles, params, side, lev, s, split, candles.length, false, ind);
+                  const test = backtest(candles, params, side, lev, s, splitTrain, splitValidation, false, ind);
+                  const final = backtest(candles, params, side, lev, s, splitValidation, candles.length, false, ind);
                   const all = backtest(candles, params, side, lev, s, 0, candles.length, true, ind);
-                  const row = decorate(symbol, interval, candles.length, params, side, lev, train, test, all, s);
+                  const row = decorate(symbol, interval, candles.length, params, side, lev, train, test, final, all, s);
                   state.results.push(row);
                   checked++;
                 }
@@ -1962,7 +1970,7 @@
         const activeSide = side === 'BOTH' ? entryDirection(candles, ind, i, params) : (entry(candles, ind, i, params, side) ? side : null);
         if(!activeSide) continue;
         const entryBar = candles[i+1];
-        const entryPrice = activeSide === 'LONG' ? entryBar.open * (1 + s.slipPct/100) : entryBar.open * (1 - s.slipPct/100);
+        const entryPrice = entryFillPrice(entryBar.open, activeSide, s);
         const margin = Math.min(cash * s.marginPct / 100, s.maxPosition / leverage);
         const order = Math.min(s.maxPosition, margin * leverage);
         if(margin < 5 || order < 5) continue;
@@ -1975,7 +1983,7 @@
         let trailStop = sl;
         const lastExit = Math.min(candles.length - 1, rangeEnd - 1);
         const timeExitIdx = Math.min(lastExit, i + 1 + params.maxHold);
-        let exitPrice = activeSide === 'LONG' ? candles[timeExitIdx].close * (1 - s.slipPct/100) : candles[timeExitIdx].close * (1 + s.slipPct/100);
+        let exitPrice = exitFillPrice(candles[timeExitIdx].close, activeSide, s);
         let exitIdx = timeExitIdx;
         let reason = 'TIME';
         let liquidated = false;
@@ -1987,10 +1995,10 @@
               exitPrice = liqPrice; exitIdx = j; reason = 'LIQ'; liquidated = true; break;
             }
             if(c.low <= activeStop){
-              exitPrice = activeStop * (1 - (s.slipPct * s.stopSlipMult)/100); exitIdx = j; reason = activeStop > sl ? 'TRAIL' : 'SL'; break;
+              exitPrice = exitFillPrice(activeStop, activeSide, s, s.stopSlipMult); exitIdx = j; reason = activeStop > sl ? 'TRAIL' : 'SL'; break;
             }
             if(c.high >= tp){
-              exitPrice = tp * (1 - s.slipPct/100); exitIdx = j; reason = 'TP'; break;
+              exitPrice = exitFillPrice(tp, activeSide, s); exitIdx = j; reason = 'TP'; break;
             }
             if(params.trail && c.high > entryPrice * (1 + Math.max(.2, params.trail*.55)/100)){
               trailStop = Math.max(trailStop, c.high * (1 - params.trail/100));
@@ -2001,10 +2009,10 @@
               exitPrice = liqPrice; exitIdx = j; reason = 'LIQ'; liquidated = true; break;
             }
             if(c.high >= activeStop){
-              exitPrice = activeStop * (1 + (s.slipPct * s.stopSlipMult)/100); exitIdx = j; reason = activeStop < sl ? 'TRAIL' : 'SL'; break;
+              exitPrice = exitFillPrice(activeStop, activeSide, s, s.stopSlipMult); exitIdx = j; reason = activeStop < sl ? 'TRAIL' : 'SL'; break;
             }
             if(c.low <= tp){
-              exitPrice = tp * (1 + s.slipPct/100); exitIdx = j; reason = 'TP'; break;
+              exitPrice = exitFillPrice(tp, activeSide, s); exitIdx = j; reason = 'TP'; break;
             }
             if(params.trail && c.low < entryPrice * (1 - Math.max(.2, params.trail*.55)/100)){
               trailStop = Math.min(trailStop, c.low * (1 + params.trail/100));
@@ -2019,7 +2027,7 @@
           }
         }
         const rawRet = markRetPct(entryPrice, exitPrice, activeSide);
-        const netRet = rawRet - s.feePct;
+        const netRet = rawRet - s.feePct - fundingCostPct(entryBar.time, candles[exitIdx].time, s);
         const pnl = liquidated ? -Math.min(cash, margin * 1.002) : order * netRet / 100;
         cash = Math.max(0, cash + pnl);
         peak = Math.max(peak, cash);
@@ -2054,18 +2062,20 @@
       };
     }
 
-    function decorate(symbol, interval, candleCount, params, side, leverage, train, test, all, s){
+    function decorate(symbol, interval, candleCount, params, side, leverage, train, test, final, all, s){
       const consistency = Math.abs(train.returnPct - test.returnPct) * .22;
-      const tradeBonus = Math.min(test.trades, 34) * .035 + Math.min(all.trades, 100) * .006;
-      const ddPenalty = test.maxDd * 1.25 + all.maxDd * .35;
-      const liqPenalty = (test.liquidations + all.liquidations) * 35;
-      const lossPenalty = (test.returnPct <= 0 ? 12 : 0) + (all.returnPct <= 0 ? 8 : 0) + (all.pf < 1 ? 5 : 0) + (all.maxDd > s.maxDd ? 20 : 0);
-      const score = test.returnPct * 1.25 + all.returnPct * .52 + train.returnPct * .08 + tradeBonus - ddPenalty - consistency - lossPenalty - liqPenalty;
+      const tradeBonus = Math.min(test.trades, 34) * .045 + Math.min(train.trades, 80) * .004;
+      const ddPenalty = test.maxDd * 1.35 + train.maxDd * .18;
+      const liqPenalty = (test.liquidations + train.liquidations) * 35;
+      const lossPenalty = (test.returnPct <= 0 ? 14 : 0) + (train.returnPct <= 0 ? 8 : 0) + (test.pf < 1 ? 6 : 0) + (test.maxDd > s.maxDd ? 20 : 0);
+      const score = test.returnPct * 1.35 + train.returnPct * .12 + tradeBonus - ddPenalty - consistency - lossPenalty - liqPenalty;
       const minTestTrades = Math.max(2, Math.floor(s.minTrades * .35));
-      const tradable = all.returnPct > 0 && test.returnPct > 0 && all.pf >= s.minPf && test.pf >= s.minPf &&
-        all.trades >= s.minTrades && test.trades >= minTestTrades && all.maxDd <= s.maxDd && test.maxDd <= s.maxDd &&
-        (!s.rejectLiq || (all.liquidations === 0 && test.liquidations === 0));
-      return {symbol, interval, candleCount, params:{...params}, side, leverage, train, test, all, score, tradable};
+      const finalPass = final.returnPct > 0 && final.pf >= s.minPf && final.maxDd <= s.maxDd && (!s.rejectLiq || final.liquidations === 0);
+      const validationPass = train.returnPct > 0 && test.returnPct > 0 && train.pf >= s.minPf && test.pf >= s.minPf &&
+        all.trades >= s.minTrades && test.trades >= minTestTrades && train.maxDd <= s.maxDd && test.maxDd <= s.maxDd &&
+        (!s.rejectLiq || (train.liquidations === 0 && test.liquidations === 0));
+      const tradable = validationPass && finalPass;
+      return {symbol, interval, candleCount, params:{...params}, side, leverage, train, test, final, all, score, tradable, validationPass, finalPass};
     }
 
     function compareResults(a,b){
@@ -2105,7 +2115,7 @@
       const rows = state.results.slice(0, 160);
       renderDirectionSummary();
       els.resultBody.innerHTML = rows.map((r,i) => {
-        if(r.system) return `<tr><td>${i+1}</td><td>${r.symbol}</td><td colspan="12" style="text-align:left;color:var(--muted)">${escapeHtml(r.reason)}</td></tr>`;
+        if(r.system) return `<tr><td>${i+1}</td><td>${r.symbol}</td><td colspan="13" style="text-align:left;color:var(--muted)">${escapeHtml(r.reason)}</td></tr>`;
         return `<tr class="${state.selected === r ? 'selected' : ''}" data-index="${i}">
           <td>${i+1}</td>
           <td>${r.symbol}</td>
@@ -2115,6 +2125,7 @@
           <td>${r.leverage}x</td>
           <td class="${cls(r.all.returnPct)}">${fmtPct(r.all.returnPct)}</td>
           <td class="${cls(r.test.returnPct)}">${fmtPct(r.test.returnPct)}</td>
+          <td class="${cls(r.final.returnPct)}">${fmtPct(r.final.returnPct)}</td>
           <td>${r.all.maxDd.toFixed(2)}%</td>
           <td>${r.all.trades}</td>
           <td>${r.all.winRate.toFixed(1)}%</td>
@@ -2198,7 +2209,7 @@
         return;
       }
       setMetric('mReturn', fmtPct(best.all.returnPct), `${best.symbol} ${best.interval} ${sideName(best.side)}`, cls(best.all.returnPct));
-      setMetric('mTest', fmtPct(best.test.returnPct), `학습 ${fmtPct(best.train.returnPct)}`, cls(best.test.returnPct));
+      setMetric('mTest', fmtPct(best.test.returnPct), `최종 ${fmtPct(best.final.returnPct)} · 학습 ${fmtPct(best.train.returnPct)}`, cls(best.test.returnPct));
       setMetric('mDd', `${best.all.maxDd.toFixed(2)}%`, `청산 ${best.all.liquidations}회`, best.all.maxDd > 20 ? 'red' : 'amber');
       setMetric('mTrades', String(best.all.trades), `검증 ${best.test.trades}`, '');
       setMetric('mWin', `${best.all.winRate.toFixed(1)}%`, `평균 ${best.all.avgRet.toFixed(2)}%`, best.all.winRate >= 50 ? 'green' : '');
@@ -2220,11 +2231,14 @@
         ['조건', `${row.interval} ${sideName(row.side)} ${row.leverage}x`],
         ['실제 방향', row.side === 'BOTH' ? tradeSideMixText(row.all.tradeRows || []) : sideName(row.side)],
         ['전략', strategyName(row.params)],
-        ['전체 / 검증', `${fmtPct(row.all.returnPct)} / ${fmtPct(row.test.returnPct)}`],
+        ['학습 / 검증 / 최종', `${fmtPct(row.train.returnPct)} / ${fmtPct(row.test.returnPct)} / ${fmtPct(row.final.returnPct)}`],
+        ['검증 판정', row.validationPass ? '통과' : '주의'],
+        ['최종 홀드아웃', row.finalPass ? '통과' : '주의'],
+        ['실전 비용 스트레스', `스프레드 ${number(els.spreadPct?.value, .04)}% / 펀딩 8h ${number(els.funding8hPct?.value, .01)}%`],
         ['최대 낙폭 / 수익 팩터', `${row.all.maxDd.toFixed(2)}% / ${row.all.pf.toFixed(2)}`],
         ['거래 / 승률', `${row.all.trades} / ${row.all.winRate.toFixed(1)}%`],
         ['청산 버퍼', `${Math.max(0, liqAdverse - row.params.sl).toFixed(2)}%`],
-        ['판정', row.tradable ? '통과' : '주의']
+        ['실전 후보 판정', row.tradable ? '통과' : row.validationPass ? '최종 주의' : '조건 미달']
       ].map(([a,b]) => `<div class="line-item"><span>${a}</span><span>${b}</span></div>`).join('');
     }
 
@@ -2916,6 +2930,7 @@
     async function findPaperEntries(s){
       const symbols = s.paperUniverse === 'candidate' ? VALIDATED.map(c => c.symbol) : s.symbols;
       if(state.paper.positions.length >= s.paperMaxOpen) return;
+      if(equityNow() <= state.paper.initial * .98) return;
       for(const symbol of symbols){
         if(state.paper.positions.length >= s.paperMaxOpen) break;
         if(s.paperNoDuplicate && state.paper.positions.some(p => p.symbol === symbol)) continue;
@@ -2925,6 +2940,7 @@
         const i = candles.length - 2;
         const side = setup.side === 'BOTH' ? entryDirection(candles, ind, i, setup.params) : (entry(candles, ind, i, setup.params, setup.side) ? setup.side : null);
         if(side){
+          if(state.paper.positions.filter(p => p.side === side).length >= 2) continue;
           const price = candles[candles.length - 1].close;
           openPaper(symbol, side, price, setup, s);
         }
@@ -2950,30 +2966,33 @@
 
     function openPaper(symbol, side, price, setup, s){
       const leverage = setup.leverage || s.leverages[0] || 1;
-      const entryPrice = side === 'LONG' ? price * (1 + s.slipPct/100) : price * (1 - s.slipPct/100);
+      const entryPrice = entryFillPrice(price, side, s);
       const margin = Math.min(equityNow() * s.marginPct / 100, s.maxPosition / leverage);
       const order = Math.min(s.maxPosition, margin * leverage);
-      if(margin < 5 || order < 5) return;
+      if(margin < 5 || order < 5 || state.paper.cash < margin) return;
       const p = setup.params;
       const tp = side === 'LONG' ? entryPrice * (1 + p.tp/100) : entryPrice * (1 - p.tp/100);
       const sl = side === 'LONG' ? entryPrice * (1 - p.sl/100) : entryPrice * (1 + p.sl/100);
       const liqAdverse = liquidationAdversePct(leverage);
       const liq = side === 'LONG' ? entryPrice * (1 - liqAdverse/100) : entryPrice * (1 + liqAdverse/100);
+      state.paper.cash = Math.max(0, state.paper.cash - margin);
       state.paper.positions.push({
         id:crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random()),
         symbol, side, leverage, entry:entryPrice, mark:price, margin, order, tp, sl, liq,
-        trailPct:p.trail, openedAt:Date.now(), strategy:strategyName(p)
+        marginReserved:true, trailPct:p.trail, openedAt:Date.now(), strategy:strategyName(p)
       });
       state.paper.journal.unshift({time:Date.now(), symbol, side, action:'OPEN', price:entryPrice, pnl:0, reason:'SIGNAL'});
     }
 
     function closePaper(pos, price, reason, s){
-      const rawRet = markRetPct(pos.entry, price, pos.side);
-      const netRet = rawRet - s.feePct;
-      const pnl = reason === 'LIQ' ? -Math.min(state.paper.cash, pos.margin * 1.002) : pos.order * netRet / 100;
-      state.paper.cash = Math.max(0, state.paper.cash + pnl);
+      const exitPrice = reason === 'LIQ' ? price : exitFillPrice(price, pos.side, s, reason === 'SL' ? s.stopSlipMult : 1);
+      const rawRet = markRetPct(pos.entry, exitPrice, pos.side);
+      const netRet = rawRet - s.feePct - fundingCostPct(pos.openedAt, Date.now(), s);
+      const pnl = reason === 'LIQ' ? -Math.min(pos.margin, pos.margin * 1.002) : pos.order * netRet / 100;
+      const release = pos.marginReserved ? pos.margin : 0;
+      state.paper.cash = Math.max(0, state.paper.cash + release + pnl);
       state.paper.positions = state.paper.positions.filter(p => p.id !== pos.id);
-      state.paper.journal.unshift({time:Date.now(), symbol:pos.symbol, side:pos.side, action:'CLOSE', price, pnl, reason, ret:netRet});
+      state.paper.journal.unshift({time:Date.now(), symbol:pos.symbol, side:pos.side, action:'CLOSE', price:exitPrice, pnl, reason, ret:netRet});
     }
 
     function markPaperEquity(){
@@ -2983,14 +3002,17 @@
     }
 
     function equityNow(){
-      return state.paper.cash + state.paper.positions.reduce((sum,p) => sum + p.order * (markRetPct(p.entry, p.mark, p.side) - number(els.feePct?.value, .08)) / 100, 0);
+      return state.paper.cash + state.paper.positions.reduce((sum,p) => {
+        const unreal = p.order * (markRetPct(p.entry, p.mark, p.side) - number(els.feePct?.value, .08)) / 100;
+        return sum + (p.marginReserved ? p.margin : 0) + unreal;
+      }, 0);
     }
 
     function renderPaper(){
       const eq = equityNow();
-      const realized = state.paper.cash - state.paper.initial;
       const unreal = state.paper.positions.reduce((sum,p) => sum + p.order * (markRetPct(p.entry, p.mark, p.side) - number(els.feePct?.value, .08)) / 100, 0);
       const closed = state.paper.journal.filter(j => j.action === 'CLOSE');
+      const realized = closed.reduce((sum,j) => sum + number(j.pnl, 0), 0);
       const wins = closed.filter(j => j.pnl >= 0).length;
       setMetric('pEquity', fmtMoney(eq), fmtPct((eq/state.paper.initial-1)*100), cls(eq-state.paper.initial));
       setMetric('pRealized', fmtMoney(realized), '수수료 포함', cls(realized));
@@ -3116,7 +3138,7 @@
 
     function writeReport(){
       const s = readSettings();
-      const best = state.selected || state.results.find(r => r.tradable && !r.system);
+      const best = state.selected || state.results.find(r => r.tradable && !r.system) || state.results.find(r => !r.system);
       const top = state.results.filter(r => !r.system).slice(0, 8);
       const lines = [];
       lines.push('# 바이낸스 랩 백테스트 보고서');
@@ -3125,18 +3147,19 @@
       lines.push(`- 조건: ${s.interval}, 캔들 ${s.candleCount}개, ${sideName(s.side)}, ${gridName(s.grid)}`);
       lines.push(`- 전략: ${modeName(s.mode)} / EMA ${s.fast}/${s.slow} / 거래량 ${s.pulse}배`);
       lines.push(`- 청산: 익절 ${s.tp}%, 손절 ${s.sl}%, 트레일 ${s.trail}%, 최대 보유봉 ${s.maxHold}`);
-      lines.push(`- 리스크: 레버리지 ${s.leverages.join(',')}x, 증거금 ${s.marginPct}%, 최대 포지션 ${s.maxPosition} USDT, 수수료 ${s.feePct}%, 슬리피지 ${s.slipPct}%`);
+      lines.push(`- 리스크: 레버리지 ${s.leverages.join(',')}x, 증거금 ${s.marginPct}%, 최대 포지션 ${s.maxPosition} USDT, 수수료 ${s.feePct}%, 슬리피지 ${s.slipPct}%, 스프레드 ${s.spreadPct}%, 펀딩 8h ${s.funding8hPct}%`);
+      lines.push('- 검증 구조: 학습 55% / 검증 23% / 최종 미사용 22%. 점수는 최종 구간을 사용하지 않습니다.');
       lines.push('');
       if(best){
         lines.push('## 최고 후보');
         lines.push(`- ${best.symbol} ${best.interval} ${sideName(best.side)} ${best.leverage}x ${strategyName(best.params)}`);
-        lines.push(`- 전체 ${fmtPct(best.all.returnPct)}, 검증 ${fmtPct(best.test.returnPct)}, 학습 ${fmtPct(best.train.returnPct)}`);
+        lines.push(`- 전체 ${fmtPct(best.all.returnPct)}, 학습 ${fmtPct(best.train.returnPct)}, 검증 ${fmtPct(best.test.returnPct)}, 최종 ${fmtPct(best.final.returnPct)} (${best.tradable ? '실전 후보 통과' : best.validationPass ? '최종 주의' : '검증 주의'})`);
         lines.push(`- 최대 낙폭 ${best.all.maxDd.toFixed(2)}%, 거래 ${best.all.trades}, 승률 ${best.all.winRate.toFixed(1)}%, 수익 팩터 ${best.all.pf.toFixed(2)}, 청산 ${best.all.liquidations}`);
         lines.push('');
       }
       lines.push('## 상위 후보');
       top.forEach((r,i) => {
-        lines.push(`${i+1}. ${r.symbol} ${sideName(r.side)} ${r.leverage}x ${strategyName(r.params)} · 전체 ${fmtPct(r.all.returnPct)} · 검증 ${fmtPct(r.test.returnPct)} · 최대 낙폭 ${r.all.maxDd.toFixed(2)}% · 수익 팩터 ${r.all.pf.toFixed(2)}`);
+        lines.push(`${i+1}. ${r.symbol} ${sideName(r.side)} ${r.leverage}x ${strategyName(r.params)} · 검증 ${fmtPct(r.test.returnPct)} · 최종 ${fmtPct(r.final.returnPct)} · 최대 낙폭 ${r.all.maxDd.toFixed(2)}% · 수익 팩터 ${r.all.pf.toFixed(2)}`);
       });
       lines.push('');
       lines.push('## 판단');
@@ -3145,8 +3168,9 @@
     }
 
     function judgement(r){
-      if(!r.tradable) return '필터 통과 전 후보입니다. 실전 자동 진입보다 조건 조정 또는 추가 검증이 먼저입니다.';
-      if(r.all.maxDd <= 10 && r.test.returnPct > 20) return '수익과 낙폭 균형이 좋은 편입니다. 다만 실전에서는 레버리지를 낮춘 포워드 테스트가 먼저입니다.';
+      if(!r.validationPass) return '학습/검증 필터 통과 전 후보입니다. 실전 자동 진입보다 조건 조정 또는 추가 검증이 먼저입니다.';
+      if(!r.finalPass) return '검증 구간은 좋아도 최종 미사용 구간이 약합니다. 실전 투입 후보가 아니라 추가 검증 대상입니다.';
+      if(r.all.maxDd <= 10 && r.test.returnPct > 20) return '수익과 낙폭 균형이 좋은 편입니다. 그래도 실전에서는 레버리지를 낮춘 포워드 테스트가 먼저입니다.';
       if(r.all.maxDd > 20) return '수익률은 높지만 낙폭이 큽니다. 공격형 후보로 분류하고 증거금 제한이 필요합니다.';
       return '백테스트상 유효 후보입니다. 모의투자로 체결 품질과 슬리피지를 확인해야 합니다.';
     }
@@ -3162,13 +3186,13 @@
 
     function exportCsv(){
       if(!state.results.length){ toast('내보낼 결과가 없습니다.'); return; }
-      const head = ['rank','symbol','interval','side','strategy','leverage','allReturn','testReturn','trainReturn','mdd','trades','winRate','pf','liquidations','score','tradable'];
+      const head = ['rank','symbol','interval','side','strategy','leverage','allReturn','testReturn','finalReturn','trainReturn','mdd','trades','winRate','pf','liquidations','score','validationPass','finalPass','tradable'];
       const lines = [head.join(',')];
       state.results.filter(r => !r.system).forEach((r,i) => {
         lines.push([
           i+1,r.symbol,r.interval,r.side,`"${strategyName(r.params)}"`,r.leverage,
-          r.all.returnPct.toFixed(4),r.test.returnPct.toFixed(4),r.train.returnPct.toFixed(4),r.all.maxDd.toFixed(4),
-          r.all.trades,r.all.winRate.toFixed(2),r.all.pf.toFixed(4),r.all.liquidations,r.score.toFixed(4),r.tradable?'Y':'N'
+          r.all.returnPct.toFixed(4),r.test.returnPct.toFixed(4),r.final.returnPct.toFixed(4),r.train.returnPct.toFixed(4),r.all.maxDd.toFixed(4),
+          r.all.trades,r.all.winRate.toFixed(2),r.all.pf.toFixed(4),r.all.liquidations,r.score.toFixed(4),r.validationPass?'Y':'N',r.finalPass?'Y':'N',r.tradable?'Y':'N'
         ].join(','));
       });
       const blob = new Blob([lines.join('\n')], {type:'text/csv;charset=utf-8'});
@@ -3277,6 +3301,21 @@
     }
     function emptySim(){ return {returnPct:0, finalEquity:0, maxDd:0, trades:0, liquidations:0, winRate:0, pf:0, avgRet:0, equity:[], drawdowns:[], tradeRows:[]}; }
     function liquidationAdversePct(leverage){ return Math.max(.05, 100 / Math.max(1, leverage) - .65 - .20); }
+    function executionHalfSpreadPct(s){ return Math.max(0, number(s.spreadPct, 0)) / 2; }
+    function entryFillPrice(price, side, s){
+      const cost = (Math.max(0, number(s.slipPct, 0)) + executionHalfSpreadPct(s)) / 100;
+      return side === 'LONG' ? price * (1 + cost) : price * (1 - cost);
+    }
+    function exitFillPrice(price, side, s, slipMult=1){
+      const cost = (Math.max(0, number(s.slipPct, 0)) * Math.max(1, slipMult) + executionHalfSpreadPct(s)) / 100;
+      return side === 'LONG' ? price * (1 - cost) : price * (1 + cost);
+    }
+    function fundingCostPct(entryTime, exitTime, s){
+      const entry = Number(entryTime) || 0;
+      const exit = Number(exitTime) || entry;
+      const hours = Math.max(0, exit - entry) / 3600000;
+      return hours / 8 * Math.max(0, number(s.funding8hPct, 0));
+    }
     function markRetPct(entryPrice, markPrice, side){
       if(!entryPrice || !markPrice) return 0;
       return side === 'LONG' ? (markPrice / entryPrice - 1) * 100 : (entryPrice - markPrice) / entryPrice * 100;
