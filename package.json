@@ -9,7 +9,12 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "deploy": "vite build && gh-pages -d dist"
+    "deploy": "vite build && gh-pages -d dist",
+    "paper:tick": "node scripts/github_paper_tick.mjs",
+    "trade:preflight": "node scripts/live_executor.mjs preflight",
+    "trade:test-order": "node scripts/live_executor.mjs validate-sample",
+    "trade:reconcile": "node scripts/live_executor.mjs reconcile",
+    "trade:kill-switch": "node scripts/live_executor.mjs kill-switch"
   },
   "dependencies": {
     "lightweight-charts": "^5.1.0",
