@@ -7,7 +7,15 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const LOCAL_STATE = path.join(ROOT, 'data', 'github_paper_state.json');
-const API = process.env.BINANCE_FAPI_BASE || 'https://fapi.binance.com/fapi/v1';
+const API_BASES = (process.env.BINANCE_API_BASES || [
+  'https://fapi.binance.com/fapi/v1',
+  'https://fapi1.binance.com/fapi/v1',
+  'https://fapi2.binance.com/fapi/v1',
+  'https://data-api.binance.vision/api/v3'
+].join(','))
+  .split(',')
+  .map(x => x.trim().replace(/\/$/, ''))
+  .filter(Boolean);
 
 const DEFAULT_SYMBOLS = [
   'BTCUSDT',
@@ -159,19 +167,41 @@ async function loadMarket(symbols, intervals, limit, errors){
 }
 
 async function fetchKlines(symbol, interval, limit){
-  const url = `${API}/klines?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}&limit=${limit}`;
-  const res = await fetch(url, { headers: { accept: 'application/json' } });
-  if(!res.ok) throw new Error(`Binance HTTP ${res.status}`);
-  const rows = await res.json();
-  if(!Array.isArray(rows) || rows.length < 80) throw new Error('not enough candles');
-  return rows.map(r => ({
-    time: Number(r[0]),
-    open: Number(r[1]),
-    high: Number(r[2]),
-    low: Number(r[3]),
-    close: Number(r[4]),
-    volume: Number(r[5])
-  }));
+  const failures = [];
+  for(const base of API_BASES){
+    const url = `${base}/klines?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}&limit=${limit}`;
+    try{
+      const res = await fetch(url, { headers: { accept: 'application/json' } });
+      if(!res.ok){
+        failures.push(`${hostLabel(base)} HTTP ${res.status}`);
+        continue;
+      }
+      const rows = await res.json();
+      if(!Array.isArray(rows) || rows.length < 80){
+        failures.push(`${hostLabel(base)} not enough candles`);
+        continue;
+      }
+      return rows.map(r => ({
+        time: Number(r[0]),
+        open: Number(r[1]),
+        high: Number(r[2]),
+        low: Number(r[3]),
+        close: Number(r[4]),
+        volume: Number(r[5])
+      }));
+    }catch(error){
+      failures.push(`${hostLabel(base)} ${error.message || String(error)}`);
+    }
+  }
+  throw new Error(failures.join('; '));
+}
+
+function hostLabel(base){
+  try{
+    return new URL(base).hostname;
+  }catch{
+    return base;
+  }
 }
 
 function updateOpenPositions(state, market){
