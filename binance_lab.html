@@ -276,9 +276,11 @@
     .tab-page.active{display:block}
     .bt-grid{
       display:grid;
-      grid-template-columns:minmax(0,1.35fr) minmax(310px,.65fr);
+      grid-template-columns:minmax(0,1fr) minmax(420px,.55fr);
       gap:12px;
+      align-items:start;
     }
+    .bt-grid > aside{min-width:0}
     .band{
       border:1px solid var(--line);
       border-radius:8px;
@@ -370,12 +372,13 @@
     }
     .help-tip::before{content:"!"}
     .help-tip::after{
-      content:attr(data-help);
-      position:absolute;
-      left:50%;
-      bottom:calc(100% + 9px);
-      width:min(280px,70vw);
-      transform:translateX(-50%) translateY(4px);
+      display:none;
+    }
+    .help-popover{
+      position:fixed;
+      left:0;
+      top:0;
+      max-width:min(320px,calc(100vw - 24px));
       padding:10px 12px;
       border:1px solid var(--line2);
       border-radius:8px;
@@ -388,13 +391,15 @@
       white-space:normal;
       text-align:left;
       opacity:0;
+      visibility:hidden;
       pointer-events:none;
-      transition:.12s ease;
-      z-index:80;
+      transform:translateX(-50%) translateY(4px);
+      transition:opacity .12s ease, transform .12s ease;
+      z-index:9999;
     }
-    .help-tip:hover::after,
-    .help-tip:focus-visible::after{
+    .help-popover.show{
       opacity:1;
+      visibility:visible;
       transform:translateX(-50%) translateY(0);
     }
     .metric .k{
@@ -486,6 +491,29 @@
     }
     .coin-chart-mini{height:132px}
     .coin-chart-card.single .coin-chart-mini{height:380px}
+    .coin-trade-panel{
+      margin-top:12px;
+      display:grid;
+      gap:8px;
+    }
+    .section-subhead{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      color:var(--muted);
+      font-size:12px;
+      font-weight:900;
+    }
+    .section-subhead span:last-child{
+      min-width:0;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+      text-align:right;
+      color:var(--dim);
+      font-size:11px;
+    }
     .small-chart{height:170px}
     .table-wrap{
       overflow:auto;
@@ -493,6 +521,12 @@
       border:1px solid var(--line);
       border-radius:8px;
     }
+    .trade-log-wrap{max-height:280px}
+    .coin-trade-table{min-width:760px}
+    .coin-trade-table th:nth-child(5),
+    .coin-trade-table td:nth-child(5){text-align:right}
+    .result-side .table-wrap{max-height:640px}
+    .result-side table{min-width:840px}
     table{
       width:100%;
       border-collapse:collapse;
@@ -899,9 +933,25 @@
                   </div>
                   <div class="band-body">
                     <div class="coin-chart-grid" id="coinChartGrid"></div>
+                    <div class="coin-trade-panel">
+                      <div class="section-subhead">
+                        <span>코인별 매수/매도 시간표</span>
+                        <span id="coinTradeSummary">백테스트 후 표시</span>
+                      </div>
+                      <div class="table-wrap trade-log-wrap">
+                        <table class="coin-trade-table">
+                          <thead>
+                            <tr><th>시간</th><th>구분</th><th>매수/매도</th><th>방향</th><th>가격</th><th>사유</th><th>손익</th><th>수익률</th></tr>
+                          </thead>
+                          <tbody id="coinTradeBody"></tbody>
+                        </table>
+                      </div>
+                    </div>
                   </div>
                 </div>
-                <div class="band">
+              </div>
+              <aside>
+                <div class="band result-side">
                   <div class="band-head">
                     <div class="band-title"><i data-lucide="table-2"></i>결과</div>
                     <div class="top-actions">
@@ -923,8 +973,6 @@
                     </div>
                   </div>
                 </div>
-              </div>
-              <aside>
                 <div class="band">
                   <div class="band-head"><div class="band-title"><i data-lucide="scan-search"></i>선택 조건</div></div>
                   <div class="band-body">
@@ -1120,6 +1168,10 @@
       paperSource:'모의투자 진입 신호를 선택 후보에서 쓸지, 현재 입력 조건에서 새로 만들지 정합니다.',
       paperUniverse:'모의투자가 감시할 종목 범위입니다. 전체 코인은 바이낸스 USDT 전체를 뜻합니다.',
       pnl:'포지션 또는 거래에서 발생한 손익 금액입니다.',
+      time:'매수나 매도가 발생한 캔들의 시간입니다. 시간순으로 보면 전략이 어느 구간에서 들어가고 나왔는지 확인할 수 있습니다.',
+      phase:'진입은 새 포지션을 여는 순간이고, 청산은 포지션을 닫는 순간입니다.',
+      orderSide:'매수는 사는 체결, 매도는 파는 체결입니다. 롱은 매수로 진입하고 숏은 매도로 진입합니다.',
+      reason:'청산 사유입니다. 익절, 손절, 트레일, 시간 청산, 강제 청산 여부를 구분합니다.',
       price:'진입, 현재가, 익절가, 손절가처럼 거래 판단에 쓰는 가격입니다.'
     };
     const API = 'https://fapi.binance.com/fapi/v1';
@@ -1165,6 +1217,7 @@
       renderSymbolChips();
       bindEvents();
       installKoreanTerms();
+      initHelpPopover();
       renderCandidates();
       renderSelected(null);
       renderCoinCharts();
@@ -1342,7 +1395,11 @@
         ['SL',['손절','sl']],
         ['손절',['손절','sl']],
         ['상태',['상태','status']],
+        ['시간',['시간','time']],
+        ['구분',['구분','phase']],
+        ['매수/매도',['매수/매도','orderSide']],
         ['가격',['가격','price']],
+        ['사유',['사유','reason']],
         ['거래량 배수',['거래량 배수','pulse']],
         ['ATR%',['ATR%','atr']],
         ['EMA',['EMA','ema']],
@@ -1363,6 +1420,62 @@
     function helpTip(key){
       const text = HELP_TEXT[key] || key;
       return `<span class="help-tip" tabindex="0" role="note" aria-label="${escapeHtml(text)}" data-help="${escapeHtml(text)}"></span>`;
+    }
+
+    function initHelpPopover(){
+      if(document.querySelector('.help-popover')) return;
+      const popover = document.createElement('div');
+      popover.className = 'help-popover';
+      popover.setAttribute('role', 'tooltip');
+      document.body.appendChild(popover);
+      let activeTip = null;
+      const show = tip => {
+        const text = tip?.dataset?.help;
+        if(!text) return;
+        activeTip = tip;
+        popover.textContent = text;
+        popover.classList.add('show');
+        positionHelpPopover(tip, popover);
+      };
+      const hide = () => {
+        activeTip = null;
+        popover.classList.remove('show');
+      };
+      document.addEventListener('mouseover', event => {
+        const tip = event.target.closest?.('.help-tip');
+        if(tip) show(tip);
+      });
+      document.addEventListener('mouseout', event => {
+        const tip = event.target.closest?.('.help-tip');
+        if(tip && !tip.contains(event.relatedTarget)) hide();
+      });
+      document.addEventListener('focusin', event => {
+        const tip = event.target.closest?.('.help-tip');
+        if(tip) show(tip);
+      });
+      document.addEventListener('focusout', event => {
+        if(event.target.closest?.('.help-tip')) hide();
+      });
+      document.addEventListener('keydown', event => {
+        if(event.key === 'Escape') hide();
+      });
+      window.addEventListener('resize', () => activeTip ? positionHelpPopover(activeTip, popover) : hide());
+      document.addEventListener('scroll', hide, true);
+    }
+
+    function positionHelpPopover(tip, popover){
+      const tipRect = tip.getBoundingClientRect();
+      const popRect = popover.getBoundingClientRect();
+      const gap = 10;
+      const safe = 10;
+      let left = tipRect.left + tipRect.width / 2;
+      const minLeft = popRect.width / 2 + safe;
+      const maxLeft = window.innerWidth - popRect.width / 2 - safe;
+      left = minLeft <= maxLeft ? clamp(left, minLeft, maxLeft) : window.innerWidth / 2;
+      let top = tipRect.top - popRect.height - gap;
+      if(top < safe) top = Math.min(window.innerHeight - popRect.height - safe, tipRect.bottom + gap);
+      popover.style.left = `${left}px`;
+      popover.style.top = `${Math.max(safe, top)}px`;
     }
 
     function bindEvents(){
@@ -2096,6 +2209,7 @@
           els.coinChartGrid.querySelector('.coin-chart-card')?.addEventListener('click', () => selectResult(idx));
         }
       }
+      renderCoinTradeTable(row);
       drawCoinCharts();
       if(window.lucide) lucide.createIcons();
     }
@@ -2155,6 +2269,48 @@
         markers.push({kind:'exit', action:exitAction, index:t.exitIndex, price:t.exit, time:t.exitTime, trade:t});
       }
       return markers.filter(m => Number.isFinite(m.index) && Number.isFinite(m.price));
+    }
+
+    function renderCoinTradeTable(row){
+      if(!els.coinTradeBody) return;
+      if(!row){
+        if(els.coinTradeSummary) els.coinTradeSummary.textContent = '백테스트 후 표시';
+        els.coinTradeBody.innerHTML = '<tr><td colspan="8" style="text-align:left;color:var(--muted)">코인을 선택하거나 백테스트를 실행하면 매수/매도 시간이 표시됩니다.</td></tr>';
+        return;
+      }
+      const rows = tradeMarkers(row.all.tradeRows || [], row.side)
+        .map(marker => ({
+          ...marker,
+          sortTime:new Date(marker.time || 0).getTime() || marker.index || 0
+        }))
+        .sort((a,b) => a.sortTime - b.sortTime || a.index - b.index || (a.kind === 'entry' ? -1 : 1));
+      const visibleRows = rows.slice(-320);
+      if(els.coinTradeSummary){
+        const suffix = rows.length > visibleRows.length ? `최근 ${visibleRows.length}/${rows.length}개` : `${rows.length}개`;
+        els.coinTradeSummary.textContent = `${row.symbol} ${sideName(row.side)} ${suffix}`;
+      }
+      if(!visibleRows.length){
+        els.coinTradeBody.innerHTML = '<tr><td colspan="8" style="text-align:left;color:var(--muted)">이 코인의 체결 기록이 아직 없습니다.</td></tr>';
+        return;
+      }
+      els.coinTradeBody.innerHTML = visibleRows.map(marker => {
+        const trade = marker.trade || {};
+        const isExit = marker.kind === 'exit';
+        const pnl = Number(trade.pnl);
+        const ret = Number(trade.netRet);
+        const actionClass = marker.action === 'BUY' ? 'long' : 'short';
+        const sideClass = (trade.side || row.side || '').toLowerCase();
+        return `<tr>
+          <td>${formatTradeTime(marker.time)}</td>
+          <td>${isExit ? '청산' : '진입'}</td>
+          <td><span class="pill ${actionClass}">${buySellName(marker.action)}</span></td>
+          <td><span class="pill ${sideClass}">${sideName(trade.side || row.side)}</span></td>
+          <td>${fmtNum(marker.price)}</td>
+          <td>${isExit ? reasonName(trade.reason) : '진입 신호'}</td>
+          <td class="${isExit ? cls(pnl) : ''}">${isExit && Number.isFinite(pnl) ? fmtMoney(pnl) : '-'}</td>
+          <td class="${isExit ? cls(ret) : ''}">${isExit && Number.isFinite(ret) ? fmtPct(ret) : '-'}</td>
+        </tr>`;
+      }).join('');
     }
 
     function drawCandleTrades(canvas, candles, row){
@@ -2821,8 +2977,29 @@
     function sideName(side){
       return side === 'BOTH' ? '양방향' : side === 'LONG' ? '롱' : side === 'SHORT' ? '숏' : side;
     }
+    function buySellName(action){
+      return action === 'BUY' ? '매수' : action === 'SELL' ? '매도' : action;
+    }
     function actionName(action){
       return action === 'OPEN' ? '진입' : action === 'CLOSE' ? '청산' : action;
+    }
+    function reasonName(reason){
+      const map = {TP:'익절', SL:'손절', TRAIL:'트레일', LIQ:'강제 청산', TIME:'시간 청산', SIGNAL:'신호'};
+      return map[reason] || reason || '-';
+    }
+    function formatTradeTime(time){
+      if(!time) return '-';
+      const d = new Date(time);
+      if(Number.isNaN(d.getTime())) return '-';
+      return d.toLocaleString('ko-KR', {
+        year:'2-digit',
+        month:'2-digit',
+        day:'2-digit',
+        hour:'2-digit',
+        minute:'2-digit',
+        second:'2-digit',
+        hour12:false
+      });
     }
     function gridName(grid){
       return grid === 'auto' ? '자동 최적' : grid === 'fast' ? '빠른 탐색' : grid === 'deep' ? '넓은 탐색' : '고정 조건';
