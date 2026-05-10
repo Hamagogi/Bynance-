@@ -582,6 +582,8 @@
     .pill.short{color:#ff9aaa;border-color:rgba(246,70,93,.35);background:rgba(246,70,93,.1)}
     .pill.both{color:#58dbe8;border-color:rgba(37,191,209,.4);background:rgba(37,191,209,.12)}
     .pill.ok{color:#ffd970;border-color:rgba(240,185,11,.35);background:rgba(240,185,11,.1)}
+    .side-stack{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+    .side-mix{font-size:10px;font-weight:900;color:var(--muted);white-space:nowrap}
     .selected-box{
       display:grid;
       gap:9px;
@@ -1732,7 +1734,7 @@
                   checked++;
                 }
               }
-              if(checked % 80 === 0){
+              if(checked && checked % 80 === 0){
                 state.results = keepDirectionBalancedResults(state.results, 240);
                 renderResultTable();
                 renderDashboard();
@@ -1911,13 +1913,13 @@
         if(p.mode === 'impulse') return pctMove(c, prev) >= .18 && closeNearHigh(c);
         if(p.mode === 'pullback') return prev.low <= ind.emaFast[i-1] * 1.002 && c.close > ind.emaFast[i];
         if(p.mode === 'reclaim') return prev.close < ind.vwap[i-1] && c.close > ind.vwap[i];
-        return c.close > ind.high[i] * 1.0002;
+        return c.close > ind.high[i-1] * 1.0002;
       }
       if(!baseOk || !shortTrend || buyRatio > .50 || c.close >= c.open) return false;
       if(p.mode === 'impulse') return pctMove(c, prev) <= -.18 && closeNearLow(c);
       if(p.mode === 'pullback') return prev.high >= ind.emaFast[i-1] * .998 && c.close < ind.emaFast[i];
       if(p.mode === 'reclaim') return prev.close > ind.vwap[i-1] && c.close < ind.vwap[i];
-      return c.close < ind.low[i] * .9998;
+      return c.close < ind.low[i-1] * .9998;
     }
 
     function entryDirection(candles, ind, i, p){
@@ -1981,7 +1983,7 @@
           const c = candles[j];
           if(activeSide === 'LONG'){
             const activeStop = Math.max(sl, trailStop);
-            if(activeStop <= liqPrice && c.low <= liqPrice){
+            if(c.low <= liqPrice){
               exitPrice = liqPrice; exitIdx = j; reason = 'LIQ'; liquidated = true; break;
             }
             if(c.low <= activeStop){
@@ -1995,7 +1997,7 @@
             }
           }else{
             const activeStop = Math.min(sl, trailStop);
-            if(activeStop >= liqPrice && c.high >= liqPrice){
+            if(c.high >= liqPrice){
               exitPrice = liqPrice; exitIdx = j; reason = 'LIQ'; liquidated = true; break;
             }
             if(c.high >= activeStop){
@@ -2016,7 +2018,7 @@
             maxDd = Math.max(maxDd, peak ? (peak - worstEq) / peak * 100 : 0);
           }
         }
-        const rawRet = activeSide === 'LONG' ? (exitPrice / entryPrice - 1) * 100 : (entryPrice / exitPrice - 1) * 100;
+        const rawRet = markRetPct(entryPrice, exitPrice, activeSide);
         const netRet = rawRet - s.feePct;
         const pnl = liquidated ? -Math.min(cash, margin * 1.002) : order * netRet / 100;
         cash = Math.max(0, cash + pnl);
@@ -2059,8 +2061,10 @@
       const liqPenalty = (test.liquidations + all.liquidations) * 35;
       const lossPenalty = (test.returnPct <= 0 ? 12 : 0) + (all.returnPct <= 0 ? 8 : 0) + (all.pf < 1 ? 5 : 0) + (all.maxDd > s.maxDd ? 20 : 0);
       const score = test.returnPct * 1.25 + all.returnPct * .52 + train.returnPct * .08 + tradeBonus - ddPenalty - consistency - lossPenalty - liqPenalty;
+      const minTestTrades = Math.max(2, Math.floor(s.minTrades * .35));
       const tradable = all.returnPct > 0 && test.returnPct > 0 && all.pf >= s.minPf && test.pf >= s.minPf &&
-        all.trades >= s.minTrades && all.maxDd <= s.maxDd && (!s.rejectLiq || (all.liquidations === 0 && test.liquidations === 0));
+        all.trades >= s.minTrades && test.trades >= minTestTrades && all.maxDd <= s.maxDd && test.maxDd <= s.maxDd &&
+        (!s.rejectLiq || (all.liquidations === 0 && test.liquidations === 0));
       return {symbol, interval, candleCount, params:{...params}, side, leverage, train, test, all, score, tradable};
     }
 
@@ -2075,18 +2079,26 @@
     function keepDirectionBalancedResults(rows, limit=240){
       const systemRows = rows.filter(r => r.system);
       const ranked = rows.filter(r => !r.system).sort(compareResults);
+      const bodyLimit = Math.max(0, limit - systemRows.length);
       const sides = ['BOTH','LONG','SHORT'].filter(side => ranked.some(r => r.side === side));
-      if(sides.length < 2) return [...systemRows, ...ranked].slice(0, limit);
+      if(sides.length < 2) return [...systemRows, ...ranked.slice(0, bodyLimit)].slice(0, limit);
       const keep = new Set();
-      const sideReserve = Math.min(72, Math.max(20, Math.floor(limit / Math.max(2, sides.length))));
+      const required = [];
+      const sideReserve = Math.max(1, Math.floor(bodyLimit / sides.length));
       sides.forEach(side => {
-        ranked.filter(r => r.side === side).slice(0, sideReserve).forEach(r => keep.add(r));
+        ranked.filter(r => r.side === side).slice(0, sideReserve).forEach(r => {
+          keep.add(r);
+          required.push(r);
+        });
       });
+      const kept = required.slice();
       for(const row of ranked){
-        if(systemRows.length + keep.size >= limit) break;
+        if(kept.length >= bodyLimit) break;
+        if(keep.has(row)) continue;
         keep.add(row);
+        kept.push(row);
       }
-      return [...systemRows, ...ranked.filter(r => keep.has(r))].slice(0, limit);
+      return [...systemRows, ...kept.sort(compareResults)].slice(0, limit);
     }
 
     function renderResultTable(){
@@ -2098,7 +2110,7 @@
           <td>${i+1}</td>
           <td>${r.symbol}</td>
           <td>${r.interval}</td>
-          <td><span class="pill ${r.side.toLowerCase()}">${sideName(r.side)}</span></td>
+          <td>${resultSideCell(r)}</td>
           <td>${strategyName(r.params)}</td>
           <td>${r.leverage}x</td>
           <td class="${cls(r.all.returnPct)}">${fmtPct(r.all.returnPct)}</td>
@@ -2136,6 +2148,25 @@
         bestLong ? `롱 최고 검증 ${fmtPct(bestLong.test.returnPct)}` : '롱 후보 없음',
         bestShort ? `숏 최고 검증 ${fmtPct(bestShort.test.returnPct)}` : '숏 후보 없음'
       ].join(' / ');
+    }
+
+    function resultSideCell(row){
+      const title = row.side === 'BOTH' ? `실제 진입 ${tradeSideMixText(row.all.tradeRows || [])}` : sideName(row.side);
+      const mix = row.side === 'BOTH' ? `<span class="side-mix">${tradeSideMixText(row.all.tradeRows || [])}</span>` : '';
+      return `<div class="side-stack"><span class="pill ${row.side.toLowerCase()}" title="${escapeHtml(title)}">${sideName(row.side)}</span>${mix}</div>`;
+    }
+
+    function tradeSideMix(trades){
+      return (trades || []).reduce((acc, trade) => {
+        if(trade.side === 'LONG') acc.long++;
+        else if(trade.side === 'SHORT') acc.short++;
+        return acc;
+      }, {long:0, short:0});
+    }
+
+    function tradeSideMixText(trades){
+      const mix = tradeSideMix(trades);
+      return `롱 ${mix.long} / 숏 ${mix.short}`;
     }
 
     function selectResult(index){
@@ -2187,6 +2218,7 @@
       els.selectedBox.innerHTML = [
         ['코인', row.symbol],
         ['조건', `${row.interval} ${sideName(row.side)} ${row.leverage}x`],
+        ['실제 방향', row.side === 'BOTH' ? tradeSideMixText(row.all.tradeRows || []) : sideName(row.side)],
         ['전략', strategyName(row.params)],
         ['전체 / 검증', `${fmtPct(row.all.returnPct)} / ${fmtPct(row.test.returnPct)}`],
         ['최대 낙폭 / 수익 팩터', `${row.all.maxDd.toFixed(2)}% / ${row.all.pf.toFixed(2)}`],
@@ -2302,12 +2334,12 @@
       }
       const item = state.coinBest.find(x => x.symbol === state.chartSymbol) || {symbol:state.chartSymbol, row:null};
       const row = item.row;
-      const summary = row ? yesterdayTradeSummary(row.all.tradeRows || [], row.side) : {buy:0, sell:0};
+      const summary = row ? yesterdayTradeSummary(row.all.tradeRows || [], row.side) : {long:0, short:0, exit:0};
       els.coinChartGrid.innerHTML = `<div class="coin-chart-card single${row && state.selected === row ? ' selected' : ''}">
         <div class="coin-chart-head">
           <div class="coin-chart-title">
             <strong>${item.symbol || '-'}</strong>
-            <span>${row ? `${row.interval} ${sideName(row.side)} ${row.leverage}x ${strategyName(row.params)} · 어제 매수 ${summary.buy} / 매도 ${summary.sell}` : '백테스트 후 캔들 위에 매수/매도 표시'}</span>
+            <span>${row ? `${row.interval} ${sideName(row.side)} ${row.leverage}x ${strategyName(row.params)} · 어제 진입 롱 ${summary.long} / 숏 ${summary.short} · 청산 ${summary.exit}` : '백테스트 후 캔들 위에 진입/청산 표시'}</span>
           </div>
           <span class="pill ${row && row.test.returnPct >= 0 ? 'ok' : ''}">${row ? fmtPct(row.test.returnPct) : '-'}</span>
         </div>
@@ -2462,10 +2494,17 @@
     }
 
     function yesterdayTradeSummary(trades, side){
-      return tradeMarkers(trades, side).reduce((acc, marker) => {
-        if(isYesterday(marker.time)) acc[marker.action === 'BUY' ? 'buy' : 'sell']++;
+      return (trades || []).reduce((acc, trade) => {
+        if(isYesterday(trade.entryTime)){
+          const actualSide = trade.side || side;
+          if(actualSide === 'SHORT') acc.short++;
+          else acc.long++;
+        }
+        if(isYesterday(trade.exitTime)){
+          acc.exit++;
+        }
         return acc;
-      }, {buy:0, sell:0});
+      }, {long:0, short:0, exit:0});
     }
 
     function isYesterday(time){
@@ -2482,10 +2521,16 @@
         const actualSide = t.side || side;
         const entryAction = actualSide === 'SHORT' ? 'SELL' : 'BUY';
         const exitAction = actualSide === 'SHORT' ? 'BUY' : 'SELL';
-        markers.push({kind:'entry', action:entryAction, index:t.entryIndex, price:t.entry, time:t.entryTime, trade:t});
-        markers.push({kind:'exit', action:exitAction, index:t.exitIndex, price:t.exit, time:t.exitTime, trade:t});
+        markers.push({kind:'entry', side:actualSide, action:entryAction, index:t.entryIndex, price:t.entry, time:t.entryTime, trade:t});
+        markers.push({kind:'exit', side:actualSide, action:exitAction, index:t.exitIndex, price:t.exit, time:t.exitTime, trade:t});
       }
       return markers.filter(m => Number.isFinite(m.index) && Number.isFinite(m.price));
+    }
+
+    function markerLabel(marker){
+      const side = marker.side || marker.trade?.side;
+      const prefix = side === 'SHORT' ? '숏' : '롱';
+      return `${prefix}${marker.kind === 'entry' ? '진' : '청'}`;
     }
 
     function renderCoinTradeTable(row){
@@ -2602,28 +2647,31 @@
         const x = xOfIndex(marker.index);
         const y = yOf(marker.price);
         const buy = marker.action === 'BUY';
+        const label = markerLabel(marker);
         const color = buy ? '#0ecb81' : '#f6465d';
         ctx.fillStyle = buy ? 'rgba(14,203,129,.14)' : 'rgba(246,70,93,.14)';
         ctx.fillRect(x - Math.max(1, cw*.42), padT, Math.max(1, cw*.84), plotH);
-        const markerR = clamp(cw * .55, 4, 10);
+        const labelFont = Math.max(9, Math.min(12, Math.floor(w / 80)));
+        ctx.font = `bold ${labelFont}px system-ui`;
+        const labelW = Math.max(24, ctx.measureText(label).width + 9);
+        const labelH = labelFont + 7;
+        const labelX = clamp(x - labelW / 2, padL + 1, w - padR - labelW - 1);
+        const labelY = clamp(y - labelH / 2, padT + 1, h - padB - labelH - 1);
         ctx.fillStyle = '#fff';
-        ctx.beginPath();
-        ctx.arc(x, y, markerR + 2, 0, Math.PI*2);
+        roundRect(ctx, labelX - 1.5, labelY - 1.5, labelW + 3, labelH + 3, 5);
         ctx.fill();
         ctx.fillStyle = color;
-        ctx.beginPath();
-        ctx.arc(x, y, markerR, 0, Math.PI*2);
+        roundRect(ctx, labelX, labelY, labelW, labelH, 4);
         ctx.fill();
         ctx.fillStyle = '#fff';
-        ctx.font = `bold ${Math.max(8, Math.min(12, markerR + 3))}px system-ui`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(buy ? 'B' : 'S', x, y + .5);
+        ctx.fillText(label, labelX + labelW / 2, labelY + labelH / 2 + .5);
         ctx.textAlign = 'left';
         ctx.textBaseline = 'alphabetic';
       });
       const summary = yesterdayTradeSummary(row.all.tradeRows || [], row.side);
-      drawLabel(ctx,w,h,`${row.symbol} ${row.interval} · 매수/매도 표시 · 어제 매수 ${summary.buy} 매도 ${summary.sell}`);
+      drawLabel(ctx,w,h,`${row.symbol} ${row.interval} · 진입/청산 표시 · 어제 진입 롱 ${summary.long} 숏 ${summary.short} 청산 ${summary.exit}`);
       ctx.fillStyle = '#95a4a8';
       ctx.font = `${Math.max(10, Math.floor(h*.03))}px system-ui`;
       ctx.textAlign = 'right';
@@ -2872,16 +2920,13 @@
         if(state.paper.positions.length >= s.paperMaxOpen) break;
         if(s.paperNoDuplicate && state.paper.positions.some(p => p.symbol === symbol)) continue;
         const setup = paperSetupFor(symbol, s);
-        const sides = setup.side === 'BOTH' ? ['LONG','SHORT'] : [setup.side];
         const candles = await loadRecentCandles(symbol, setup.interval, 260);
         const ind = indicators(candles, setup.params);
         const i = candles.length - 2;
-        for(const side of sides){
-          if(entry(candles, ind, i, setup.params, side)){
-            const price = candles[candles.length - 1].close;
-            openPaper(symbol, side, price, setup, s);
-            break;
-          }
+        const side = setup.side === 'BOTH' ? entryDirection(candles, ind, i, setup.params) : (entry(candles, ind, i, setup.params, setup.side) ? setup.side : null);
+        if(side){
+          const price = candles[candles.length - 1].close;
+          openPaper(symbol, side, price, setup, s);
         }
         await pause(80);
       }
@@ -3234,7 +3279,7 @@
     function liquidationAdversePct(leverage){ return Math.max(.05, 100 / Math.max(1, leverage) - .65 - .20); }
     function markRetPct(entryPrice, markPrice, side){
       if(!entryPrice || !markPrice) return 0;
-      return side === 'LONG' ? (markPrice / entryPrice - 1) * 100 : (entryPrice / markPrice - 1) * 100;
+      return side === 'LONG' ? (markPrice / entryPrice - 1) * 100 : (entryPrice - markPrice) / entryPrice * 100;
     }
     function pctMove(c,p){ return p?.close ? (c.close / p.close - 1) * 100 : 0; }
     function closeNearHigh(c){ return (c.high - c.close) / Math.max(1e-9, c.high - c.low) <= .25; }
@@ -3390,6 +3435,20 @@
       ctx.fillStyle = '#95a4a8';
       ctx.font = `${Math.max(11, Math.floor(h*.045))}px system-ui`;
       ctx.fillText(text, 12, 20);
+    }
+    function roundRect(ctx,x,y,w,h,r){
+      const rr = Math.min(r, w/2, h/2);
+      ctx.beginPath();
+      ctx.moveTo(x + rr, y);
+      ctx.lineTo(x + w - rr, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + rr);
+      ctx.lineTo(x + w, y + h - rr);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - rr, y + h);
+      ctx.lineTo(x + rr, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - rr);
+      ctx.lineTo(x, y + rr);
+      ctx.quadraticCurveTo(x, y, x + rr, y);
+      ctx.closePath();
     }
     function drawEmpty(ctx,w,h,text){
       ctx.fillStyle = '#66777c';
