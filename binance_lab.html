@@ -823,7 +823,7 @@
             <div class="entry-candidate-block">
               <div class="section-subhead">
                 <span>진입 조건 후보</span>
-                <span>클릭 시 조건 적용</span>
+                <span>방향은 현재 선택 유지</span>
               </div>
               <div class="preset-list entry-candidates" id="candidateList"></div>
             </div>
@@ -990,6 +990,7 @@
                   <div class="band-head">
                     <div class="band-title"><i data-lucide="table-2"></i>결과</div>
                     <div class="top-actions">
+                      <span class="pill" id="directionSummary">롱/숏 -</span>
                       <button id="exportBtn"><i data-lucide="download"></i>CSV</button>
                       <button id="applyToPaperBtn"><i data-lucide="send"></i>모의 적용</button>
                     </div>
@@ -1731,13 +1732,13 @@
                 }
               }
               if(checked % 80 === 0){
-                state.results = sortResults(state.results).slice(0, 240);
+                state.results = keepDirectionBalancedResults(state.results, 240);
                 renderResultTable();
                 renderDashboard();
                 await pause(0);
               }
             }
-            state.results = sortResults(state.results).slice(0, 240);
+            state.results = keepDirectionBalancedResults(state.results, 240);
             done++;
             updateProgress(done, total);
             renderResultTable();
@@ -1753,7 +1754,7 @@
         state.running = false;
         els.runBtn.disabled = false;
         els.stopBtn.disabled = true;
-        state.results = sortResults(state.results).slice(0, 240);
+        state.results = keepDirectionBalancedResults(state.results, 240);
         if(state.results[0]) selectResult(0);
         renderResultTable();
         renderDashboard();
@@ -2042,12 +2043,34 @@
       return {symbol, interval, candleCount, params:{...params}, side, leverage, train, test, all, score, tradable};
     }
 
+    function compareResults(a,b){
+      return Number(!!b.tradable) - Number(!!a.tradable) || b.score - a.score || b.test.returnPct - a.test.returnPct;
+    }
+
     function sortResults(rows){
-      return rows.sort((a,b) => Number(!!b.tradable) - Number(!!a.tradable) || b.score - a.score || b.test.returnPct - a.test.returnPct);
+      return rows.sort(compareResults);
+    }
+
+    function keepDirectionBalancedResults(rows, limit=240){
+      const systemRows = rows.filter(r => r.system);
+      const ranked = rows.filter(r => !r.system).sort(compareResults);
+      const sides = ['LONG','SHORT'].filter(side => ranked.some(r => r.side === side));
+      if(sides.length < 2) return [...systemRows, ...ranked].slice(0, limit);
+      const keep = new Set();
+      const sideReserve = Math.min(80, Math.max(24, Math.floor(limit * .32)));
+      sides.forEach(side => {
+        ranked.filter(r => r.side === side).slice(0, sideReserve).forEach(r => keep.add(r));
+      });
+      for(const row of ranked){
+        if(systemRows.length + keep.size >= limit) break;
+        keep.add(row);
+      }
+      return [...systemRows, ...ranked.filter(r => keep.has(r))].slice(0, limit);
     }
 
     function renderResultTable(){
       const rows = state.results.slice(0, 160);
+      renderDirectionSummary();
       els.resultBody.innerHTML = rows.map((r,i) => {
         if(r.system) return `<tr><td>${i+1}</td><td>${r.symbol}</td><td colspan="12" style="text-align:left;color:var(--muted)">${escapeHtml(r.reason)}</td></tr>`;
         return `<tr class="${state.selected === r ? 'selected' : ''}" data-index="${i}">
@@ -2070,6 +2093,25 @@
       els.resultBody.querySelectorAll('tr[data-index]').forEach(tr => {
         tr.addEventListener('click', () => selectResult(Number(tr.dataset.index)));
       });
+    }
+
+    function renderDirectionSummary(){
+      if(!els.directionSummary) return;
+      const rows = state.results.filter(r => !r.system);
+      if(!rows.length){
+        els.directionSummary.textContent = '롱/숏 -';
+        els.directionSummary.title = '';
+        return;
+      }
+      const longs = rows.filter(r => r.side === 'LONG');
+      const shorts = rows.filter(r => r.side === 'SHORT');
+      const bestLong = longs.slice().sort(compareResults)[0];
+      const bestShort = shorts.slice().sort(compareResults)[0];
+      els.directionSummary.textContent = `롱 ${longs.length} · 숏 ${shorts.length}`;
+      els.directionSummary.title = [
+        bestLong ? `롱 최고 검증 ${fmtPct(bestLong.test.returnPct)}` : '롱 후보 없음',
+        bestShort ? `숏 최고 검증 ${fmtPct(bestShort.test.returnPct)}` : '숏 후보 없음'
+      ].join(' / ');
     }
 
     function selectResult(index){
@@ -2570,7 +2612,7 @@
       els.candidateList.innerHTML = VALIDATED.map(c => `
         <div class="candidate" data-symbol="${c.symbol}">
           <div class="candidate-top"><span>${c.symbol}</span><span class="pill ok">${fmtPct(c.test)}</span></div>
-          <div class="candidate-sub">${c.interval} ${sideName(c.side)} ${c.leverage}x ${modeName(c.mode)} ${c.fast}/${c.slow} 익절${c.tp} 손절${c.sl}</div>
+          <div class="candidate-sub">${c.interval} 방향 유지 ${c.leverage}x ${modeName(c.mode)} ${c.fast}/${c.slow} 익절${c.tp} 손절${c.sl}</div>
           <div class="candidate-sub">전체 ${fmtPct(c.all)} · 최대 낙폭 ${c.mdd.toFixed(2)}%</div>
         </div>
       `).join('');
@@ -2585,7 +2627,6 @@
       setSymbols([c.symbol], false);
       els.intervalSelect.value = c.interval;
       els.modeSelect.value = c.mode;
-      els.sideSelect.value = c.side;
       els.gridSelect.value = 'fixed';
       els.fastEma.value = c.fast;
       els.slowEma.value = c.slow;
