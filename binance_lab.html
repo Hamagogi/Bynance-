@@ -439,6 +439,12 @@
       min-width:320px;
     }
     .timeline-tools input{min-height:28px;padding:0}
+    .icon-btn{
+      width:32px;
+      min-height:28px;
+      padding:0;
+    }
+    .icon-btn svg{width:15px;height:15px}
     #playTimelineBtn,
     #stopTimelineBtn,
     #timelineSlider{
@@ -490,7 +496,12 @@
       text-overflow:ellipsis;
     }
     .coin-chart-mini{height:132px}
-    .coin-chart-card.single .coin-chart-mini{height:380px}
+    .coin-chart-card.single .coin-chart-mini{
+      height:420px;
+      cursor:grab;
+      touch-action:none;
+    }
+    .coin-chart-card.single .coin-chart-mini.dragging{cursor:grabbing}
     .coin-trade-panel{
       margin-top:12px;
       display:grid;
@@ -946,6 +957,9 @@
                     <div class="band-title"><i data-lucide="candlestick-chart"></i>코인별 차트</div>
                     <div class="timeline-tools">
                       <select id="coinChartSelect"></select>
+                      <button id="fitCandlesBtn" class="icon-btn" type="button" aria-label="전체 캔들 보기" title="전체 캔들 보기"><i data-lucide="scan"></i></button>
+                      <button id="zoomOutCandlesBtn" class="icon-btn" type="button" aria-label="캔들 축소" title="축소"><i data-lucide="zoom-out"></i></button>
+                      <button id="zoomInCandlesBtn" class="icon-btn" type="button" aria-label="캔들 확대" title="확대"><i data-lucide="zoom-in"></i></button>
                       <button id="playTimelineBtn" type="button"><i data-lucide="play"></i>재생</button>
                       <button id="stopTimelineBtn" type="button"><i data-lucide="pause"></i>정지</button>
                       <input id="timelineSlider" type="range" min="0" max="100" value="100" />
@@ -1200,6 +1214,12 @@
       cache:new Map(),
       coinBest:[],
       chartSymbol:null,
+      candleView:{
+        key:'',
+        start:0,
+        end:0,
+        drag:null
+      },
       serverPaper:{
         available:false,
         mode:'none',
@@ -1522,8 +1542,15 @@
       els.timelineSlider?.addEventListener('input', () => setTimeline(number(els.timelineSlider.value, 100)));
       els.coinChartSelect?.addEventListener('change', () => {
         state.chartSymbol = els.coinChartSelect.value;
+        resetCandleView();
         renderCoinCharts();
       });
+      els.fitCandlesBtn?.addEventListener('click', () => {
+        resetCandleView();
+        drawCoinCharts();
+      });
+      els.zoomInCandlesBtn?.addEventListener('click', () => zoomCandleView(.72));
+      els.zoomOutCandlesBtn?.addEventListener('click', () => zoomCandleView(1.38));
     }
 
     function populateSymbolSelect(){
@@ -1659,6 +1686,7 @@
       state.results = [];
       state.selected = null;
       state.coinBest = [];
+      resetCandleView();
       setTimeline(100, false);
       els.runBtn.disabled = true;
       els.stopBtn.disabled = false;
@@ -2049,6 +2077,7 @@
       if(!row || row.system) return;
       state.selected = row;
       state.chartSymbol = row.symbol;
+      resetCandleView();
       renderResultTable();
       renderDashboard();
       renderSelected(row);
@@ -2226,6 +2255,7 @@
       }
       renderCoinTradeTable(row);
       drawCoinCharts();
+      attachCandleChartInteractions();
       if(window.lucide) lucide.createIcons();
     }
 
@@ -2245,6 +2275,111 @@
         return;
       }
       drawCandleTrades(canvas, cachedCandlesForRow(item.row), item.row);
+    }
+
+    function attachCandleChartInteractions(){
+      const canvas = els.coinChartGrid?.querySelector('.coin-canvas');
+      const wrap = canvas?.parentElement;
+      if(!canvas || canvas.dataset.interactive === '1') return;
+      canvas.dataset.interactive = '1';
+      canvas.addEventListener('wheel', event => {
+        const item = state.coinBest.find(x => x.symbol === state.chartSymbol);
+        if(!item?.row) return;
+        event.preventDefault();
+        const rect = canvas.getBoundingClientRect();
+        const focus = rect.width ? clamp((event.clientX - rect.left) / rect.width, 0, 1) : .5;
+        zoomCandleView(event.deltaY < 0 ? .82 : 1.22, focus);
+      }, {passive:false});
+      canvas.addEventListener('pointerdown', event => {
+        const item = state.coinBest.find(x => x.symbol === state.chartSymbol);
+        if(!item?.row) return;
+        const view = state.candleView;
+        const candles = cachedCandlesForRow(item.row);
+        ensureCandleView(candles, item.row);
+        view.drag = {
+          pointerId:event.pointerId,
+          x:event.clientX,
+          start:view.start,
+          end:view.end
+        };
+        wrap?.classList.add('dragging');
+        canvas.setPointerCapture?.(event.pointerId);
+      });
+      canvas.addEventListener('pointermove', event => {
+        const drag = state.candleView.drag;
+        if(!drag) return;
+        const item = state.coinBest.find(x => x.symbol === state.chartSymbol);
+        if(!item?.row) return;
+        const candles = cachedCandlesForRow(item.row);
+        if(candles.length < 2) return;
+        const rect = canvas.getBoundingClientRect();
+        const span = drag.end - drag.start;
+        const deltaBars = rect.width ? (event.clientX - drag.x) / rect.width * span : 0;
+        setCandleView(drag.start - deltaBars, drag.end - deltaBars, candles.length);
+        drawCoinCharts();
+      });
+      const endDrag = event => {
+        if(state.candleView.drag?.pointerId === event.pointerId){
+          state.candleView.drag = null;
+          wrap?.classList.remove('dragging');
+          canvas.releasePointerCapture?.(event.pointerId);
+        }
+      };
+      canvas.addEventListener('pointerup', endDrag);
+      canvas.addEventListener('pointercancel', endDrag);
+      canvas.addEventListener('pointerleave', event => {
+        if(state.candleView.drag) endDrag(event);
+      });
+    }
+
+    function resetCandleView(){
+      state.candleView.key = '';
+      state.candleView.start = 0;
+      state.candleView.end = 0;
+      state.candleView.drag = null;
+    }
+
+    function candleViewKey(row, candles){
+      return `${row?.symbol || ''}|${row?.interval || ''}|${row?.candleCount || candles.length}|${candles.length}`;
+    }
+
+    function ensureCandleView(candles, row){
+      const len = candles?.length || 0;
+      const key = candleViewKey(row, candles || []);
+      const view = state.candleView;
+      if(view.key !== key || view.end <= view.start || view.end > len || view.start < 0){
+        view.key = key;
+        view.start = 0;
+        view.end = len;
+        view.drag = null;
+      }
+      return view;
+    }
+
+    function setCandleView(start, end, len){
+      const minSpan = Math.min(len, Math.max(12, Math.floor(len ? Math.min(80, len) : 12)));
+      let span = Math.max(minSpan, end - start);
+      span = Math.min(len, span);
+      start = Number.isFinite(start) ? start : 0;
+      end = start + span;
+      if(start < 0){ start = 0; end = span; }
+      if(end > len){ end = len; start = Math.max(0, end - span); }
+      state.candleView.start = start;
+      state.candleView.end = end;
+    }
+
+    function zoomCandleView(scale, focus=.5){
+      const item = state.coinBest.find(x => x.symbol === state.chartSymbol);
+      if(!item?.row) return;
+      const candles = cachedCandlesForRow(item.row);
+      if(candles.length < 2) return;
+      const view = ensureCandleView(candles, item.row);
+      const span = view.end - view.start;
+      const anchor = view.start + span * clamp(focus, 0, 1);
+      const nextSpan = span * scale;
+      const nextStart = anchor - nextSpan * clamp(focus, 0, 1);
+      setCandleView(nextStart, nextStart + nextSpan, candles.length);
+      drawCoinCharts();
     }
 
     function cachedCandlesForRow(row){
@@ -2337,16 +2472,17 @@
         drawEmpty(ctx,w,h,'캔들 캐시 없음');
         return;
       }
-      const maxBars = Math.min(260, candles.length);
-      const start = Math.max(0, candles.length - maxBars);
-      const view = candles.slice(start);
+      const activeView = ensureCandleView(candles, row);
+      const start = Math.max(0, Math.floor(activeView.start));
+      const end = Math.min(candles.length, Math.max(start + 2, Math.ceil(activeView.end)));
+      const view = candles.slice(start, end);
       const padL = 54, padR = 14, padT = 24, padB = 34;
       const plotW = Math.max(10, w - padL - padR);
       const plotH = Math.max(10, h - padT - padB);
       let lo = Math.min(...view.map(c => c.low));
       let hi = Math.max(...view.map(c => c.high));
       const markers = tradeMarkers(row.all.tradeRows || [], row.side);
-      const visibleMarkers = markers.filter(m => m.index >= start && m.index < candles.length);
+      const visibleMarkers = markers.filter(m => m.index >= start && m.index < end);
       visibleMarkers.forEach(m => { lo = Math.min(lo, m.price); hi = Math.max(hi, m.price); });
       const span = Math.max(1e-9, hi - lo);
       lo -= span * .10;
@@ -2361,6 +2497,8 @@
         ctx.fillText(fmtNum(price), 6, y + 4);
       }
       const cw = plotW / view.length;
+      const bodyW = Math.max(1, Math.min(10, cw * .66));
+      const thinCandles = cw < 2.4;
       view.forEach((c, i) => {
         const x = padL + (i + .5) * cw;
         const up = c.close >= c.open;
@@ -2374,9 +2512,13 @@
         const yo = yOf(c.open), yc = yOf(c.close);
         const top = Math.min(yo, yc);
         const bodyH = Math.max(2, Math.abs(yc - yo));
-        ctx.fillRect(x - Math.max(1, cw*.32), top, Math.max(2, cw*.64), bodyH);
+        if(thinCandles){
+          ctx.fillRect(Math.round(x), top, 1, bodyH);
+        }else{
+          ctx.fillRect(x - bodyW/2, top, bodyW, bodyH);
+        }
       });
-      const pairedTrades = (row.all.tradeRows || []).filter(t => t.exitIndex >= start && t.entryIndex < candles.length);
+      const pairedTrades = (row.all.tradeRows || []).filter(t => t.exitIndex >= start && t.entryIndex < end);
       pairedTrades.forEach(t => {
         const ex = xOfIndex(t.entryIndex);
         const sx = xOfIndex(t.exitIndex);
@@ -2395,17 +2537,18 @@
         const buy = marker.action === 'BUY';
         const color = buy ? '#0ecb81' : '#f6465d';
         ctx.fillStyle = buy ? 'rgba(14,203,129,.14)' : 'rgba(246,70,93,.14)';
-        ctx.fillRect(x - Math.max(2, cw*.42), padT, Math.max(3, cw*.84), plotH);
+        ctx.fillRect(x - Math.max(1, cw*.42), padT, Math.max(1, cw*.84), plotH);
+        const markerR = clamp(cw * .55, 4, 10);
         ctx.fillStyle = '#fff';
         ctx.beginPath();
-        ctx.arc(x, y, 10, 0, Math.PI*2);
+        ctx.arc(x, y, markerR + 2, 0, Math.PI*2);
         ctx.fill();
         ctx.fillStyle = color;
         ctx.beginPath();
-        ctx.arc(x, y, 8, 0, Math.PI*2);
+        ctx.arc(x, y, markerR, 0, Math.PI*2);
         ctx.fill();
         ctx.fillStyle = '#fff';
-        ctx.font = `bold ${Math.max(10, Math.floor(h*.035))}px system-ui`;
+        ctx.font = `bold ${Math.max(8, Math.min(12, markerR + 3))}px system-ui`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(buy ? 'B' : 'S', x, y + .5);
@@ -2417,7 +2560,8 @@
       ctx.fillStyle = '#95a4a8';
       ctx.font = `${Math.max(10, Math.floor(h*.03))}px system-ui`;
       ctx.textAlign = 'right';
-      ctx.fillText(`${view.length}개 캔들 · 표시 ${visibleMarkers.length}/${markers.length}`, w - 12, h - 12);
+      const rangeText = start === 0 && end === candles.length ? '전체' : `${start + 1}-${end}`;
+      ctx.fillText(`${rangeText} · ${view.length}/${candles.length}개 캔들 · 표시 ${visibleMarkers.length}/${markers.length}`, w - 12, h - 12);
       ctx.textAlign = 'left';
     }
 
