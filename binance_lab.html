@@ -826,7 +826,7 @@
             <div class="entry-candidate-block">
               <div class="section-subhead">
                 <span>진입 조건 후보</span>
-                <span>방향은 현재 선택 유지</span>
+                <span>시장 상태별 자동 후보</span>
               </div>
               <div class="preset-list entry-candidates" id="candidateList"></div>
             </div>
@@ -1178,13 +1178,112 @@
       aggressive: ['PLAYUSDT','SKYAIUSDT','VVVUSDT','SAHARAUSDT','ZECUSDT','SPORTFUNUSDT'],
       majors: ['BTCUSDT','ETHUSDT','SOLUSDT']
     };
-    const VALIDATED = [
-      {symbol:'ONUSDT', interval:'15m', side:'LONG', leverage:10, mode:'pullback', fast:8, slow:21, pulse:1.05, tp:2.8, sl:1, trail:.35, all:163.65, test:115.52, mdd:12.30},
-      {symbol:'ZEREBROUSDT', interval:'5m', side:'LONG', leverage:10, mode:'impulse', fast:5, slow:13, pulse:1.35, tp:1.8, sl:1, trail:0, all:168.27, test:79.39, mdd:9.33},
-      {symbol:'TONUSDT', interval:'5m', side:'LONG', leverage:10, mode:'impulse', fast:12, slow:34, pulse:1.05, tp:2.8, sl:1, trail:0, all:111.19, test:113.01, mdd:10.68},
-      {symbol:'ICPUSDT', interval:'3m', side:'LONG', leverage:10, mode:'pullback', fast:12, slow:34, pulse:1.05, tp:2.8, sl:1, trail:0, all:96.01, test:91.37, mdd:13.55},
-      {symbol:'ONDOUSDT', interval:'3m', side:'LONG', leverage:10, mode:'pullback', fast:8, slow:21, pulse:2.2, tp:2.8, sl:.75, trail:0, all:78.75, test:53.84, mdd:14.68},
-      {symbol:'SIRENUSDT', interval:'1m', side:'LONG', leverage:10, mode:'impulse', fast:5, slow:13, pulse:1.8, tp:1.8, sl:1, trail:0, all:60.21, test:58.50, mdd:14.47}
+    const ENTRY_CANDIDATES = [
+      {
+        id:'balanced-flow',
+        name:'균형 추세 눌림',
+        tag:'기본',
+        interval:'5m',
+        side:'BOTH',
+        leverage:3,
+        mode:'pullback',
+        fast:8,
+        slow:21,
+        pulse:1.35,
+        vwapLen:96,
+        breakout:18,
+        minAtr:.06,
+        maxAtr:2.8,
+        tp:1.6,
+        sl:.55,
+        trail:.35,
+        maxHold:24,
+        note:'추세 위에서 짧게 눌렸다가 다시 회복하는 구간만 진입합니다. 롱/숏 모두 감시합니다.'
+      },
+      {
+        id:'compression-breakout',
+        name:'거래량 돌파',
+        tag:'단타',
+        interval:'3m',
+        side:'BOTH',
+        leverage:3,
+        mode:'impulse',
+        fast:5,
+        slow:13,
+        pulse:1.8,
+        vwapLen:64,
+        breakout:20,
+        minAtr:.10,
+        maxAtr:3.5,
+        tp:1.15,
+        sl:.42,
+        trail:.25,
+        maxHold:12,
+        note:'거래대금이 평소보다 커지고 캔들이 고점/저점 쪽으로 닫힐 때만 빠르게 들어갑니다.'
+      },
+      {
+        id:'vwap-reclaim',
+        name:'VWAP 회복/이탈',
+        tag:'안정',
+        interval:'5m',
+        side:'BOTH',
+        leverage:2,
+        mode:'reclaim',
+        fast:8,
+        slow:21,
+        pulse:1.12,
+        vwapLen:144,
+        breakout:14,
+        minAtr:.04,
+        maxAtr:2.2,
+        tp:1.05,
+        sl:.38,
+        trail:.25,
+        maxHold:18,
+        note:'시장 평균가인 VWAP을 다시 회복하거나 이탈하는 순간을 확인해 과열 진입을 줄입니다.'
+      },
+      {
+        id:'slow-trend',
+        name:'15분 추세 확인',
+        tag:'보수',
+        interval:'15m',
+        side:'BOTH',
+        leverage:2,
+        mode:'pullback',
+        fast:12,
+        slow:34,
+        pulse:1.10,
+        vwapLen:96,
+        breakout:24,
+        minAtr:.05,
+        maxAtr:1.8,
+        tp:2.2,
+        sl:.75,
+        trail:.50,
+        maxHold:48,
+        note:'짧은 잡음을 줄이고 15분 추세가 살아 있는 코인만 천천히 확인합니다.'
+      },
+      {
+        id:'failure-reversal',
+        name:'돌파 실패 역방향',
+        tag:'방어',
+        interval:'5m',
+        side:'BOTH',
+        leverage:2,
+        mode:'breakout',
+        fast:8,
+        slow:21,
+        pulse:1.45,
+        vwapLen:96,
+        breakout:30,
+        minAtr:.08,
+        maxAtr:3.0,
+        tp:1.35,
+        sl:.50,
+        trail:.30,
+        maxHold:16,
+        note:'큰 거래량 돌파가 이어질 때만 추세에 탑승하고, 조건이 약하면 후보에서 밀리도록 설계했습니다.'
+      }
     ];
     let ALL_SYMBOLS = [
       'ONUSDT','ZEREBROUSDT','TONUSDT','ICPUSDT','PLAYUSDT','SKYAIUSDT','VVVUSDT','SPORTFUNUSDT',
@@ -1851,7 +1950,8 @@
         for(const tp of tps) for(const sl of sls) for(const trail of trails) for(const maxHold of holds){
           out.push({...base, mode, fast, slow, pulse, tp, sl, trail, maxHold});
         }
-      return spreadGrid(out, s.comboLimit);
+      const candidateSeeds = ENTRY_CANDIDATES.map(candidateToParams);
+      return spreadGrid(dedupeParamGrid([...candidateSeeds, ...out]), s.comboLimit);
     }
 
     async function loadKlines(symbol, interval, count, s){
@@ -2762,35 +2862,41 @@
 
     function renderCandidates(){
       if(!els.candidateList) return;
-      els.candidateList.innerHTML = VALIDATED.map(c => `
-        <div class="candidate" data-symbol="${c.symbol}">
-          <div class="candidate-top"><span>${c.symbol}</span><span class="pill ok">${fmtPct(c.test)}</span></div>
-          <div class="candidate-sub">${c.interval} 방향 유지 ${c.leverage}x ${modeName(c.mode)} ${c.fast}/${c.slow} 익절${c.tp} 손절${c.sl}</div>
-          <div class="candidate-sub">전체 ${fmtPct(c.all)} · 최대 낙폭 ${c.mdd.toFixed(2)}%</div>
+      els.candidateList.innerHTML = ENTRY_CANDIDATES.map(c => `
+        <div class="candidate" data-id="${c.id}">
+          <div class="candidate-top"><span>${c.name}</span><span class="pill ok">${c.tag}</span></div>
+          <div class="candidate-sub">${c.interval} ${sideName(c.side)} ${c.leverage}x ${modeName(c.mode)} · EMA ${c.fast}/${c.slow} · VWAP ${c.vwapLen}</div>
+          <div class="candidate-sub">익절 ${c.tp}% · 손절 ${c.sl}% · 트레일 ${c.trail}% · 거래량 ${c.pulse}배</div>
+          <div class="candidate-sub">${c.note}</div>
         </div>
       `).join('');
       els.candidateList.querySelectorAll('.candidate').forEach(el => {
-        el.addEventListener('click', () => applyCandidate(el.dataset.symbol));
+        el.addEventListener('click', () => applyCandidate(el.dataset.id));
       });
     }
 
-    function applyCandidate(symbol){
-      const c = VALIDATED.find(x => x.symbol === symbol);
+    function applyCandidate(id){
+      const c = ENTRY_CANDIDATES.find(x => x.id === id);
       if(!c) return;
-      setSymbols([c.symbol], false);
       els.intervalSelect.value = c.interval;
+      els.sideSelect.value = c.side;
       els.modeSelect.value = c.mode;
-      els.gridSelect.value = 'fixed';
+      els.gridSelect.value = 'auto';
       els.fastEma.value = c.fast;
       els.slowEma.value = c.slow;
       els.pulse.value = c.pulse;
+      els.vwapLen.value = c.vwapLen;
+      els.breakoutLen.value = c.breakout;
+      els.minAtr.value = c.minAtr;
+      els.maxAtr.value = c.maxAtr;
       els.tpPct.value = c.tp;
       els.slPct.value = c.sl;
       els.trailPct.value = c.trail;
+      els.maxHold.value = c.maxHold;
       els.leverages.value = String(c.leverage);
       els.presetSelect.value = 'custom';
       saveSettings();
-      toast(`${symbol} 조건을 적용했습니다.`);
+      toast(`${c.name} 진입법을 적용했습니다.`);
     }
 
     function applySelectedToPaper(){
@@ -2994,40 +3100,39 @@
     }
 
     async function findPaperEntries(s){
-      const symbols = s.paperUniverse === 'candidate' ? VALIDATED.map(c => c.symbol) : s.symbols;
+      const symbols = s.symbols;
       if(state.paper.positions.length >= s.paperMaxOpen) return;
       if(equityNow() <= state.paper.initial * .98) return;
       for(const symbol of symbols){
         if(state.paper.positions.length >= s.paperMaxOpen) break;
         if(s.paperNoDuplicate && state.paper.positions.some(p => p.symbol === symbol)) continue;
-        const setup = paperSetupFor(symbol, s);
-        const candles = await loadRecentCandles(symbol, setup.interval, 260);
-        const ind = indicators(candles, setup.params);
-        const i = candles.length - 2;
-        const side = setup.side === 'BOTH' ? entryDirection(candles, ind, i, setup.params) : (entry(candles, ind, i, setup.params, setup.side) ? setup.side : null);
-        if(side){
-          if(state.paper.positions.filter(p => p.side === side).length >= 2) continue;
-          const price = candles[candles.length - 1].close;
-          openPaper(symbol, side, price, setup, s);
+        const setups = paperSetupsFor(symbol, s);
+        let picked = null;
+        for(const setup of setups){
+          const candles = await loadRecentCandles(symbol, setup.interval, 260);
+          const ind = indicators(candles, setup.params);
+          const i = candles.length - 2;
+          const side = setup.side === 'BOTH' ? entryDirection(candles, ind, i, setup.params) : (entry(candles, ind, i, setup.params, setup.side) ? setup.side : null);
+          if(side){
+            picked = {setup, side, price:candles[candles.length - 1].close};
+            break;
+          }
+          await pause(35);
+        }
+        if(picked){
+          if(state.paper.positions.filter(p => p.side === picked.side).length >= 2) continue;
+          openPaper(symbol, picked.side, picked.price, picked.setup, s);
         }
         await pause(80);
       }
     }
 
-    function paperSetupFor(symbol, s){
+    function paperSetupsFor(symbol, s){
       if(s.paperSource === 'selected' && state.selected){
-        return {interval:state.selected.interval, side:state.selected.side, leverage:state.selected.leverage, params:{...state.selected.params}};
+        return [{interval:state.selected.interval, side:state.selected.side, leverage:state.selected.leverage, params:{...state.selected.params}}];
       }
-      const v = VALIDATED.find(c => c.symbol === symbol);
-      if(s.paperUniverse === 'candidate' && v){
-        return {
-          interval:v.interval,
-          side:v.side,
-          leverage:v.leverage,
-          params:{mode:v.mode, fast:v.fast, slow:v.slow, pulse:v.pulse, tp:v.tp, sl:v.sl, trail:v.trail, maxHold:s.maxHold, breakout:s.breakout, minAtr:s.minAtr, maxAtr:s.maxAtr, vwapLen:s.vwapLen}
-        };
-      }
-      return {interval:s.interval === 'auto' ? '3m' : s.interval, side:s.side, leverage:s.leverages[0] || 1, params:singleParams(s)};
+      if(s.paperUniverse === 'candidate') return candidateSetupsFor(s);
+      return [{interval:s.interval === 'auto' ? '3m' : s.interval, side:s.side, leverage:s.leverages[0] || 1, params:singleParams(s)}];
     }
 
     function openPaper(symbol, side, price, setup, s){
@@ -3410,6 +3515,44 @@
         maxAtr:s.maxAtr,
         vwapLen:s.vwapLen
       };
+    }
+
+    function candidateToParams(c){
+      return {
+        mode:c.mode,
+        fast:c.fast,
+        slow:c.slow,
+        pulse:c.pulse,
+        tp:c.tp,
+        sl:c.sl,
+        maxHold:c.maxHold,
+        trail:c.trail,
+        breakout:c.breakout,
+        minAtr:c.minAtr,
+        maxAtr:c.maxAtr,
+        vwapLen:c.vwapLen,
+        source:c.id
+      };
+    }
+
+    function candidateSetupsFor(s){
+      return ENTRY_CANDIDATES.map(c => ({
+        interval:c.interval,
+        side:c.side,
+        leverage:c.leverage,
+        params:candidateToParams(c)
+      }));
+    }
+
+    function dedupeParamGrid(rows){
+      const seen = new Set();
+      return rows.filter(row => {
+        const key = ['mode','fast','slow','pulse','tp','sl','trail','maxHold','breakout','minAtr','maxAtr','vwapLen']
+          .map(k => row[k]).join('|');
+        if(seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
     }
 
     function intervalsFor(s){
