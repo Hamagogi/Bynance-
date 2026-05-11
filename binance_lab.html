@@ -826,7 +826,7 @@
             <div class="entry-candidate-block">
               <div class="section-subhead">
                 <span>진입 조건 후보</span>
-                <span>시장 상태별 자동 후보</span>
+                <span>여러 후보를 백테스트로 자동 선별</span>
               </div>
               <div class="preset-list entry-candidates" id="candidateList"></div>
             </div>
@@ -1285,6 +1285,7 @@
         note:'큰 거래량 돌파가 이어질 때만 추세에 탑승하고, 조건이 약하면 후보에서 밀리도록 설계했습니다.'
       }
     ];
+    const ENTRY_CANDIDATE_VARIANTS = expandEntryCandidates(ENTRY_CANDIDATES);
     let ALL_SYMBOLS = [
       'ONUSDT','ZEREBROUSDT','TONUSDT','ICPUSDT','PLAYUSDT','SKYAIUSDT','VVVUSDT','SPORTFUNUSDT',
       'SAHARAUSDT','ONDOUSDT','SIRENUSDT','JUPUSDT','STRKUSDT','ZECUSDT','JTOUSDT','BILLUSDT',
@@ -1874,6 +1875,7 @@
             const splitValidation = Math.floor(candles.length * .78);
             let checked = 0;
             for(const params of paramsList){
+              if(params.preferredInterval && s.interval === 'auto' && params.preferredInterval !== interval) continue;
               const ind = indicators(candles, params);
               for(const side of sides){
                 for(const lev of s.leverages){
@@ -1950,8 +1952,10 @@
         for(const tp of tps) for(const sl of sls) for(const trail of trails) for(const maxHold of holds){
           out.push({...base, mode, fast, slow, pulse, tp, sl, trail, maxHold});
         }
-      const candidateSeeds = ENTRY_CANDIDATES.map(candidateToParams);
-      return spreadGrid(dedupeParamGrid([...candidateSeeds, ...out]), s.comboLimit);
+      const candidateSeeds = candidateParamSeeds();
+      const generatedLimit = Math.max(0, Number(s.comboLimit) - candidateSeeds.length);
+      const generated = spreadGrid(dedupeParamGrid(out), generatedLimit || out.length);
+      return dedupeParamGrid([...candidateSeeds, ...generated]).slice(0, Math.max(candidateSeeds.length, Number(s.comboLimit) || candidateSeeds.length));
     }
 
     async function loadKlines(symbol, interval, count, s){
@@ -2862,10 +2866,10 @@
 
     function renderCandidates(){
       if(!els.candidateList) return;
-      els.candidateList.innerHTML = ENTRY_CANDIDATES.map(c => `
+      els.candidateList.innerHTML = ENTRY_CANDIDATE_VARIANTS.map(c => `
         <div class="candidate" data-id="${c.id}">
           <div class="candidate-top"><span>${c.name}</span><span class="pill ok">${c.tag}</span></div>
-          <div class="candidate-sub">${c.interval} ${sideName(c.side)} ${c.leverage}x ${modeName(c.mode)} · EMA ${c.fast}/${c.slow} · VWAP ${c.vwapLen}</div>
+          <div class="candidate-sub">${c.interval} ${sideName(c.side)} ${c.leverage}x ${modeName(c.mode)} · ${c.variant} · EMA ${c.fast}/${c.slow} · VWAP ${c.vwapLen}</div>
           <div class="candidate-sub">익절 ${c.tp}% · 손절 ${c.sl}% · 트레일 ${c.trail}% · 거래량 ${c.pulse}배</div>
           <div class="candidate-sub">${c.note}</div>
         </div>
@@ -2876,7 +2880,7 @@
     }
 
     function applyCandidate(id){
-      const c = ENTRY_CANDIDATES.find(x => x.id === id);
+      const c = ENTRY_CANDIDATE_VARIANTS.find(x => x.id === id);
       if(!c) return;
       els.intervalSelect.value = c.interval;
       els.sideSelect.value = c.side;
@@ -2938,6 +2942,7 @@
             let hitParams = null;
             let hitInd = null;
             for(const params of paramsList){
+              if(params.preferredInterval && s.interval === 'auto' && params.preferredInterval !== interval) continue;
               const ind = indicators(candles, params);
               for(const side of sides){
                 if(entry(candles, ind, i, params, side)){
@@ -3517,6 +3522,84 @@
       };
     }
 
+    function expandEntryCandidates(baseList){
+      const variants = [
+        {
+          id:'balanced',
+          label:'균형형',
+          tag:'균형',
+          note:'수익률과 안정성을 함께 보는 기본 후보입니다.'
+        },
+        {
+          id:'early',
+          label:'빠른 진입',
+          tag:'속도',
+          pulse:-.16,
+          tp:.82,
+          sl:.84,
+          trail:.84,
+          hold:.72,
+          breakout:-4,
+          note:'신호를 빨리 잡되 짧게 손절하고 빠르게 확인합니다.'
+        },
+        {
+          id:'confirm',
+          label:'확인 진입',
+          tag:'확인',
+          pulse:.24,
+          tp:1.12,
+          sl:.92,
+          trail:1.05,
+          hold:1.08,
+          breakout:4,
+          note:'거래량과 돌파 확인을 더 요구해서 가짜 신호를 줄입니다.'
+        },
+        {
+          id:'runner',
+          label:'추세 보유',
+          tag:'추세',
+          pulse:.10,
+          tp:1.45,
+          sl:1.16,
+          trail:1.32,
+          hold:1.65,
+          breakout:2,
+          note:'강한 흐름이 이어질 때 목표 수익과 보유 시간을 더 넓게 둡니다.'
+        }
+      ];
+      return baseList.flatMap(base => variants.map(v => {
+        const isBase = v.id === 'balanced';
+        return {
+          ...base,
+          id:`${base.id}-${v.id}`,
+          baseId:base.id,
+          variant:v.label,
+          name:isBase ? `${base.name} · ${v.label}` : `${base.name} · ${v.label}`,
+          tag:v.tag || base.tag,
+          pulse:roundCandidate(Math.max(1.01, base.pulse + (v.pulse || 0))),
+          tp:roundCandidate(Math.max(.25, base.tp * (v.tp || 1))),
+          sl:roundCandidate(Math.max(.18, base.sl * (v.sl || 1))),
+          trail:roundCandidate(Math.max(0, base.trail * (v.trail || 1))),
+          maxHold:Math.max(4, Math.round(base.maxHold * (v.hold || 1))),
+          breakout:Math.max(8, Math.round(base.breakout + (v.breakout || 0))),
+          note:`${base.note} ${v.note}`
+        };
+      }));
+    }
+
+    function roundCandidate(value){
+      return Math.round(value * 100) / 100;
+    }
+
+    function candidateParamSeeds(){
+      return ENTRY_CANDIDATE_VARIANTS.map(candidateToParams);
+    }
+
+    function candidateDisplayName(id){
+      const c = ENTRY_CANDIDATE_VARIANTS.find(x => x.id === id) || ENTRY_CANDIDATES.find(x => x.id === id);
+      return c ? c.name : '';
+    }
+
     function candidateToParams(c){
       return {
         mode:c.mode,
@@ -3531,12 +3614,14 @@
         minAtr:c.minAtr,
         maxAtr:c.maxAtr,
         vwapLen:c.vwapLen,
-        source:c.id
+        source:c.id,
+        preferredInterval:c.interval,
+        variant:c.variant || c.tag
       };
     }
 
     function candidateSetupsFor(s){
-      return ENTRY_CANDIDATES.map(c => ({
+      return ENTRY_CANDIDATE_VARIANTS.map(c => ({
         interval:c.interval,
         side:c.side,
         leverage:c.leverage,
@@ -3547,7 +3632,7 @@
     function dedupeParamGrid(rows){
       const seen = new Set();
       return rows.filter(row => {
-        const key = ['mode','fast','slow','pulse','tp','sl','trail','maxHold','breakout','minAtr','maxAtr','vwapLen']
+        const key = ['mode','fast','slow','pulse','tp','sl','trail','maxHold','breakout','minAtr','maxAtr','vwapLen','preferredInterval']
           .map(k => row[k]).join('|');
         if(seen.has(key)) return false;
         seen.add(key);
@@ -3578,7 +3663,8 @@
     function strategyName(p){
       if(!p || !p.mode) return '-';
       const m = modeName(p.mode);
-      return `${m} ${p.fast}/${p.slow} 거래량x${p.pulse} 익절${p.tp} 손절${p.sl}${p.trail ? ` 트레일${p.trail}` : ''}`;
+      const source = p.source ? `${candidateDisplayName(p.source)} · ` : '';
+      return `${source}${m} ${p.fast}/${p.slow} 거래량x${p.pulse} 익절${p.tp} 손절${p.sl}${p.trail ? ` 트레일${p.trail}` : ''}`;
     }
     function modeName(mode){
       return mode === 'auto' ? '자동 최적' : mode === 'pullback' ? '눌림목' : mode === 'impulse' ? '추세 돌파' : mode === 'reclaim' ? '평균가 회복' : mode === 'breakout' ? '고점/저점 돌파' : '혼합';
