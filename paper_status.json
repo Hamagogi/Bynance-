@@ -1,0 +1,2056 @@
+{
+  "ok": true,
+  "generatedAt": "2026-05-18T08:34:51.352Z",
+  "source": "github-actions",
+  "paper": {
+    "settings": {
+      "capital": 3000,
+      "leverage": 3,
+      "feePct": 0.08,
+      "slipPct": 0.02,
+      "spreadPct": 0.04,
+      "funding8hPct": 0.01,
+      "marginPct": 14,
+      "maxPosition": 900,
+      "maxPositions": 4,
+      "minScore": 1,
+      "maxHoldMinutes": 360,
+      "intervals": [
+        "3m",
+        "5m",
+        "15m"
+      ],
+      "candleLimit": 260,
+      "scanSymbolLimit": 0,
+      "fast": 8,
+      "slow": 21,
+      "pulse": 1.35,
+      "vwapLen": 96,
+      "breakout": 14,
+      "minAtr": 0.04,
+      "maxAtr": 4.2,
+      "tpPct": 2.8,
+      "slPct": 0.75,
+      "trailPct": 0.35,
+      "stopSlipMult": 1.35,
+      "maxDailyLossPct": 2,
+      "maxSameSidePositions": 2,
+      "requireMarketQuality": true,
+      "minQuoteVolume": 50000000,
+      "maxLiveSpreadPct": 0.08,
+      "minTopBookUsdt": 1500,
+      "maxFundingRatePct": 0.08,
+      "minReadinessDays": 30,
+      "minReadinessTrades": 80,
+      "readinessMinReturnPct": 2,
+      "readinessMinPf": 1.3,
+      "readinessMaxDdPct": 5
+    },
+    "running": true,
+    "lastUpdated": "2026-05-18T08:34:51.352Z",
+    "cash": 2943.729429,
+    "initial": 3000,
+    "positions": [],
+    "journal": [
+      {
+        "time": 1778423978449,
+        "symbol": "FLOKIUSDT",
+        "side": "LONG",
+        "action": "CLOSE",
+        "price": 0.00003698261,
+        "pnl": 23.773381724999957,
+        "ret": 2.641486858333329,
+        "reason": "SL"
+      },
+      {
+        "time": 1778404099875,
+        "symbol": "EDUUSDT",
+        "side": "LONG",
+        "action": "CLOSE",
+        "price": 0.05213948292,
+        "pnl": -5.198354940625021,
+        "ret": -0.5775949934027801,
+        "reason": "SL"
+      },
+      {
+        "time": 1778404099875,
+        "symbol": "ASRUSDT",
+        "side": "LONG",
+        "action": "CLOSE",
+        "price": 1.33255940258,
+        "pnl": -9.71434141293647,
+        "ret": -1.0793712681040522,
+        "reason": "SL"
+      },
+      {
+        "time": 1778404099875,
+        "symbol": "APTUSDT",
+        "side": "LONG",
+        "action": "CLOSE",
+        "price": 1.113849282,
+        "pnl": 5.657552268749919,
+        "ret": 0.6286169187499909,
+        "reason": "TP"
+      },
+      {
+        "time": 1778402875894,
+        "symbol": "EDUUSDT",
+        "side": "LONG",
+        "action": "OPEN",
+        "price": 0.0524,
+        "pnl": 0,
+        "reason": "3m score 6.00 rsi 66.7 atr 0.25%"
+      },
+      {
+        "time": 1778402875894,
+        "symbol": "EDUUSDT",
+        "side": "LONG",
+        "action": "CLOSE",
+        "price": 0.052164,
+        "pnl": -4.7734351145038,
+        "ret": -0.5303816793893111,
+        "reason": "SL"
+      },
+      {
+        "time": 1778402770588,
+        "symbol": "EDUUSDT",
+        "side": "LONG",
+        "action": "OPEN",
+        "price": 0.0524,
+        "pnl": 0,
+        "reason": "3m score 6.00 rsi 66.7 atr 0.25%"
+      },
+      {
+        "time": 1778402770588,
+        "symbol": "XVSUSDT",
+        "side": "LONG",
+        "action": "CLOSE",
+        "price": 2.843035714285714,
+        "pnl": 0.24202213279670268,
+        "ret": 0.026891348088522518,
+        "reason": "SL"
+      },
+      {
+        "time": 1778401759105,
+        "symbol": "ASRUSDT",
+        "side": "LONG",
+        "action": "OPEN",
+        "price": 1.346,
+        "pnl": 0,
+        "reason": "15m score 6.45 rsi 60.6 atr 0.83%"
+      },
+      {
+        "time": 1778401759105,
+        "symbol": "ASRUSDT",
+        "side": "LONG",
+        "action": "CLOSE",
+        "price": 1.333186,
+        "pnl": -9.288053491827743,
+        "ret": -1.032005943536416,
+        "reason": "SL"
+      },
+      {
+        "time": 1778401342311,
+        "symbol": "ASRUSDT",
+        "side": "LONG",
+        "action": "OPEN",
+        "price": 1.346,
+        "pnl": 0,
+        "reason": "15m score 6.45 rsi 60.6 atr 0.83%"
+      },
+      {
+        "time": 1778401342311,
+        "symbol": "ASRUSDT",
+        "side": "LONG",
+        "action": "CLOSE",
+        "price": 1.333186,
+        "pnl": -9.288053491827743,
+        "ret": -1.032005943536416,
+        "reason": "SL"
+      },
+      {
+        "time": 1778400980601,
+        "symbol": "FLOKIUSDT",
+        "side": "LONG",
+        "action": "OPEN",
+        "price": 0.00003628,
+        "pnl": 0,
+        "reason": "5m score 6.00 rsi 64.6 atr 0.22%"
+      },
+      {
+        "time": 1778400980601,
+        "symbol": "APTUSDT",
+        "side": "LONG",
+        "action": "OPEN",
+        "price": 1.106,
+        "pnl": 0,
+        "reason": "5m score 6.00 rsi 60.6 atr 0.32%"
+      },
+      {
+        "time": 1778400980601,
+        "symbol": "ASRUSDT",
+        "side": "LONG",
+        "action": "OPEN",
+        "price": 1.346,
+        "pnl": 0,
+        "reason": "15m score 6.45 rsi 60.6 atr 0.83%"
+      },
+      {
+        "time": 1778400980601,
+        "symbol": "DOGSUSDT",
+        "side": "SHORT",
+        "action": "CLOSE",
+        "price": 0.00007,
+        "pnl": -13.763478260869624,
+        "ret": -1.529275362318847,
+        "reason": "SL"
+      },
+      {
+        "time": 1778400980601,
+        "symbol": "SOPHUSDT",
+        "side": "LONG",
+        "action": "CLOSE",
+        "price": 0.00963,
+        "pnl": 7.770566037735748,
+        "ret": 0.8633962264150831,
+        "reason": "TP"
+      },
+      {
+        "time": 1778400980601,
+        "symbol": "POLUSDT",
+        "side": "LONG",
+        "action": "CLOSE",
+        "price": 0.102183,
+        "pnl": -5.250671859785806,
+        "ret": -0.5834079844206451,
+        "reason": "SL"
+      },
+      {
+        "time": 1778400309794,
+        "symbol": "DOGSUSDT",
+        "side": "SHORT",
+        "action": "OPEN",
+        "price": 0.0000693,
+        "pnl": 0,
+        "reason": "5m score 6.45 rsi 41.7 atr 0.70%"
+      },
+      {
+        "time": 1778400309794,
+        "symbol": "BBUSDT",
+        "side": "LONG",
+        "action": "CLOSE",
+        "price": 0.03427,
+        "pnl": -6.720000000000039,
+        "ret": -0.7466666666666709,
+        "reason": "SL"
+      },
+      {
+        "time": 1778399816887,
+        "symbol": "SOPHUSDT",
+        "side": "LONG",
+        "action": "OPEN",
+        "price": 0.00954,
+        "pnl": 0,
+        "reason": "5m score 6.12 rsi 61.1 atr 0.51%"
+      },
+      {
+        "time": 1778399816887,
+        "symbol": "XVSUSDT",
+        "side": "LONG",
+        "action": "OPEN",
+        "price": 2.84,
+        "pnl": 0,
+        "reason": "15m score 6.45 rsi 63.6 atr 0.43%"
+      },
+      {
+        "time": 1778399816887,
+        "symbol": "CHZUSDT",
+        "side": "LONG",
+        "action": "CLOSE",
+        "price": 0.045484,
+        "pnl": -4.77778069599485,
+        "ret": -0.5308645217772056,
+        "reason": "SL"
+      },
+      {
+        "time": 1778399816887,
+        "symbol": "METUSDT",
+        "side": "SHORT",
+        "action": "CLOSE",
+        "price": 0.179712,
+        "pnl": -5.3106040268458345,
+        "ret": -0.5900671140939816,
+        "reason": "SL"
+      },
+      {
+        "time": 1778398911536,
+        "symbol": "POLUSDT",
+        "side": "LONG",
+        "action": "OPEN",
+        "price": 0.1027,
+        "pnl": 0,
+        "reason": "15m score 6.45 rsi 63.0 atr 0.44%"
+      },
+      {
+        "time": 1778398911536,
+        "symbol": "ONDOUSDT",
+        "side": "SHORT",
+        "action": "CLOSE",
+        "price": 0.407571,
+        "pnl": -7.777121661721165,
+        "ret": -0.8641246290801295,
+        "reason": "SL"
+      },
+      {
+        "time": 1778398137371,
+        "symbol": "CHZUSDT",
+        "side": "LONG",
+        "action": "OPEN",
+        "price": 0.04569,
+        "pnl": 0,
+        "reason": "3m score 6.00 rsi 65.4 atr 0.24%"
+      },
+      {
+        "time": 1778398137371,
+        "symbol": "TONUSDT",
+        "side": "LONG",
+        "action": "CLOSE",
+        "price": 2.492257,
+        "pnl": -7.082031872509943,
+        "ret": -0.7868924302788826,
+        "reason": "SL"
+      },
+      {
+        "time": 1778397408761,
+        "symbol": "METUSDT",
+        "side": "SHORT",
+        "action": "OPEN",
+        "price": 0.1788,
+        "pnl": 0,
+        "reason": "15m score 6.45 rsi 41.1 atr 0.44%"
+      },
+      {
+        "time": 1778397408761,
+        "symbol": "SUIUSDT",
+        "side": "SHORT",
+        "action": "CLOSE",
+        "price": 1.081244,
+        "pnl": -4.770167224080336,
+        "ret": -0.5300185804533707,
+        "reason": "SL"
+      },
+      {
+        "time": 1778396669604,
+        "symbol": "BBUSDT",
+        "side": "LONG",
+        "action": "OPEN",
+        "price": 0.0345,
+        "pnl": 0,
+        "reason": "5m score 6.14 rsi 55.0 atr 0.58%"
+      },
+      {
+        "time": 1778396290714,
+        "symbol": "SUIUSDT",
+        "side": "SHORT",
+        "action": "OPEN",
+        "price": 1.0764,
+        "pnl": 0,
+        "reason": "5m score 4.35 rsi 52.1 atr 0.26%"
+      },
+      {
+        "time": 1778396290714,
+        "symbol": "ONDOUSDT",
+        "side": "SHORT",
+        "action": "OPEN",
+        "price": 0.4044,
+        "pnl": 0,
+        "reason": "15m score 4.80 rsi 25.7 atr 0.68%"
+      },
+      {
+        "time": 1778396290714,
+        "symbol": "TONUSDT",
+        "side": "LONG",
+        "action": "OPEN",
+        "price": 2.51,
+        "pnl": 0,
+        "reason": "5m score 4.80 rsi 55.8 atr 0.61%"
+      }
+    ],
+    "equity": [
+      {
+        "time": 1778396175596,
+        "value": 3000
+      },
+      {
+        "time": 1778396175596,
+        "value": 3000
+      },
+      {
+        "time": 1778396290714,
+        "value": 2997.84
+      },
+      {
+        "time": 1778396669604,
+        "value": 3002.872214
+      },
+      {
+        "time": 1778397408761,
+        "value": 2990.482879
+      },
+      {
+        "time": 1778398137371,
+        "value": 2980.433586
+      },
+      {
+        "time": 1778398911536,
+        "value": 2971.625247
+      },
+      {
+        "time": 1778399816887,
+        "value": 2960.432225
+      },
+      {
+        "time": 1778400309794,
+        "value": 2961.356406
+      },
+      {
+        "time": 1778400980601,
+        "value": 2949.43871
+      },
+      {
+        "time": 1778401342311,
+        "value": 2947.150657
+      },
+      {
+        "time": 1778401759105,
+        "value": 2943.617576
+      },
+      {
+        "time": 1778402770588,
+        "value": 2934.609377
+      },
+      {
+        "time": 1778402875894,
+        "value": 2929.835942
+      },
+      {
+        "time": 1778402957382,
+        "value": 2929.835942
+      },
+      {
+        "time": 1778404099875,
+        "value": 2930.736047
+      },
+      {
+        "time": 1778404833470,
+        "value": 2929.236047
+      },
+      {
+        "time": 1778404969949,
+        "value": 2929.236047
+      },
+      {
+        "time": 1778405422448,
+        "value": 2929.486047
+      },
+      {
+        "time": 1778407380233,
+        "value": 2929.736047
+      },
+      {
+        "time": 1778411253485,
+        "value": 2928.236047
+      },
+      {
+        "time": 1778414429364,
+        "value": 2921.486047
+      },
+      {
+        "time": 1778420535632,
+        "value": 2937.986047
+      },
+      {
+        "time": 1778423978449,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778427352590,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778430748990,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778434283173,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778438015211,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778442102393,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778444863887,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778447498785,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778450651282,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778454070284,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778457601369,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778471872166,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778485178024,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778496492604,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778506468153,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778510669773,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778511175333,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778511679410,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778516238585,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778522878012,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778529690119,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778534664285,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778538707777,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778542337541,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778548701630,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778561386857,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778571226795,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778580542806,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778587929191,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778597352661,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778605151114,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778612243209,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778617710037,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778622564142,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778626195532,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778629537003,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778635795705,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778649169156,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778659948660,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778668981378,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778675582741,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778686051339,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778693645920,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778700125844,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778705998716,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778710639978,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778715195943,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778722091202,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778735220051,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778745159255,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778752966280,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778760023878,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778768876175,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778776067319,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778782529257,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778788995097,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778793528393,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778797967405,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778801439031,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778808153174,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778821345998,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778832583137,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778841372249,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778847585651,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778856050484,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778862283346,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778867907917,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778873944834,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778877792827,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778881487434,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778884725127,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778888049749,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778894357342,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778906524790,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778914991922,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778921721558,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778926121105,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778930187346,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778933291687,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778939780947,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778943108658,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778946208594,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778949447590,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778952986354,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778956549850,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778960624246,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778963373692,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778966666564,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778969303434,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778972641698,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778976119008,
+        "value": 2943.729429
+      },
+      {
+        "time": 1778991162522,
+        "value": 2943.729429
+      },
+      {
+        "time": 1779002026229,
+        "value": 2943.729429
+      },
+      {
+        "time": 1779009198139,
+        "value": 2943.729429
+      },
+      {
+        "time": 1779014360084,
+        "value": 2943.729429
+      },
+      {
+        "time": 1779018144714,
+        "value": 2943.729429
+      },
+      {
+        "time": 1779021589253,
+        "value": 2943.729429
+      },
+      {
+        "time": 1779026945810,
+        "value": 2943.729429
+      },
+      {
+        "time": 1779030905750,
+        "value": 2943.729429
+      },
+      {
+        "time": 1779034369400,
+        "value": 2943.729429
+      },
+      {
+        "time": 1779038040481,
+        "value": 2943.729429
+      },
+      {
+        "time": 1779041433153,
+        "value": 2943.729429
+      },
+      {
+        "time": 1779046483382,
+        "value": 2943.729429
+      },
+      {
+        "time": 1779049628295,
+        "value": 2943.729429
+      },
+      {
+        "time": 1779053154695,
+        "value": 2943.729429
+      },
+      {
+        "time": 1779055939893,
+        "value": 2943.729429
+      },
+      {
+        "time": 1779059471905,
+        "value": 2943.729429
+      },
+      {
+        "time": 1779062959075,
+        "value": 2943.729429
+      },
+      {
+        "time": 1779079169645,
+        "value": 2943.729429
+      },
+      {
+        "time": 1779093291352,
+        "value": 2943.729429
+      }
+    ],
+    "stats": {
+      "returnPct": -1.875685699999996,
+      "closedTrades": 17,
+      "wins": 4,
+      "losses": 13,
+      "winRate": 23.52941176470588,
+      "profitFactor": 0.3995505963371425,
+      "maxDrawdownPct": 2.7102774011015613,
+      "liquidations": 0,
+      "lossGuardHits": 7,
+      "ageDays": 8.068469398148148,
+      "updatedAt": "2026-05-18T08:34:51.352Z"
+    },
+    "readiness": {
+      "status": "NOT_READY",
+      "score": 33,
+      "passed": 3,
+      "total": 9,
+      "message": "실자금 투입 금지: 장기 모의운용 기준을 아직 통과하지 못했습니다.",
+      "criteria": [
+        {
+          "key": "paperDays",
+          "label": "30일 이상 모의운용",
+          "value": "8.1일",
+          "pass": false
+        },
+        {
+          "key": "closedTrades",
+          "label": "80회 이상 종료 거래",
+          "value": "17회",
+          "pass": false
+        },
+        {
+          "key": "returnPct",
+          "label": "순수익 2% 이상",
+          "value": "-1.88%",
+          "pass": false
+        },
+        {
+          "key": "profitFactor",
+          "label": "수익 팩터 1.3 이상",
+          "value": "0.40",
+          "pass": false
+        },
+        {
+          "key": "drawdown",
+          "label": "최대 낙폭 5% 이하",
+          "value": "2.71%",
+          "pass": true
+        },
+        {
+          "key": "liquidations",
+          "label": "강제 청산 0회",
+          "value": "0회",
+          "pass": true
+        },
+        {
+          "key": "lossGuard",
+          "label": "일일 손실 제한 미발동",
+          "value": "7회",
+          "pass": false
+        },
+        {
+          "key": "operationalErrors",
+          "label": "운영 오류 0건",
+          "value": "0건",
+          "pass": true
+        },
+        {
+          "key": "marketQuality",
+          "label": "감시 종목 시장 품질 필터 통과",
+          "value": "0/430",
+          "pass": false
+        }
+      ]
+    },
+    "marketQuality": {
+      "total": 430,
+      "passed": 0,
+      "rejected": 430,
+      "updatedAt": "2026-05-18T08:34:51.352Z",
+      "warnings": [
+        "펀딩 데이터를 확인할 수 없어 신규 진입을 차단했습니다."
+      ],
+      "watched": [
+        {
+          "symbol": "USDCUSDT",
+          "quoteVolume": 1178246574.5,
+          "spreadPct": 0.001,
+          "topBookDepthUsdt": 10861210.16,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "BTCUSDT",
+          "quoteVolume": 934117869.2,
+          "spreadPct": 0.00001,
+          "topBookDepthUsdt": 85480.18,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "ETHUSDT",
+          "quoteVolume": 505559088.85,
+          "spreadPct": 0.00047,
+          "topBookDepthUsdt": 8849.43,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "SOLUSDT",
+          "quoteVolume": 205870248.25,
+          "spreadPct": 0.01179,
+          "topBookDepthUsdt": 31998.05,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "XRPUSDT",
+          "quoteVolume": 127820607.27,
+          "spreadPct": 0.00722,
+          "topBookDepthUsdt": 23518.13,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "DOGEUSDT",
+          "quoteVolume": 117780736.44,
+          "spreadPct": 0.00959,
+          "topBookDepthUsdt": 8413.05,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "ZECUSDT",
+          "quoteVolume": 115575075.38,
+          "spreadPct": 0.00188,
+          "topBookDepthUsdt": 167.15,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "최우선 호가 깊이 167 < 1.5K",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "USD1USDT",
+          "quoteVolume": 111995522.16,
+          "spreadPct": 0.01,
+          "topBookDepthUsdt": 4229444.72,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "BNBUSDT",
+          "quoteVolume": 74667578.91,
+          "spreadPct": 0.00156,
+          "topBookDepthUsdt": 3063.94,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "SPKUSDT",
+          "quoteVolume": 46439213.71,
+          "spreadPct": 0.00339,
+          "topBookDepthUsdt": 1397.81,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 46.4M < 50.0M",
+            "최우선 호가 깊이 1.4K < 1.5K",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "SUIUSDT",
+          "quoteVolume": 46065682.6,
+          "spreadPct": 0.00965,
+          "topBookDepthUsdt": 387.48,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 46.1M < 50.0M",
+            "최우선 호가 깊이 387 < 1.5K",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "EDENUSDT",
+          "quoteVolume": 35908126.18,
+          "spreadPct": 0.19066,
+          "topBookDepthUsdt": 280.59,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 35.9M < 50.0M",
+            "스프레드 0.191% > 0.08%",
+            "최우선 호가 깊이 281 < 1.5K",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "TRXUSDT",
+          "quoteVolume": 33253388.18,
+          "spreadPct": 0.0281,
+          "topBookDepthUsdt": 22832.36,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 33.3M < 50.0M",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "FDUSDUSDT",
+          "quoteVolume": 32509064.47,
+          "spreadPct": 0.01002,
+          "topBookDepthUsdt": 829972.05,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 32.5M < 50.0M",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "TONUSDT",
+          "quoteVolume": 30917095.31,
+          "spreadPct": 0.05169,
+          "topBookDepthUsdt": 6763.86,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 30.9M < 50.0M",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "LINKUSDT",
+          "quoteVolume": 28695667.72,
+          "spreadPct": 0.10565,
+          "topBookDepthUsdt": 59196.61,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 28.7M < 50.0M",
+            "스프레드 0.106% > 0.08%",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "TAOUSDT",
+          "quoteVolume": 27894901.38,
+          "spreadPct": 0.03845,
+          "topBookDepthUsdt": 2688.84,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 27.9M < 50.0M",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "ADAUSDT",
+          "quoteVolume": 27658660.1,
+          "spreadPct": 0.04002,
+          "topBookDepthUsdt": 14093.62,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 27.7M < 50.0M",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "PEPEUSDT",
+          "quoteVolume": 25554008.14,
+          "spreadPct": 0.2751,
+          "topBookDepthUsdt": 112351.45,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 25.6M < 50.0M",
+            "스프레드 0.275% > 0.08%",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "BCHUSDT",
+          "quoteVolume": 25191186.27,
+          "spreadPct": 0.02742,
+          "topBookDepthUsdt": 1093.01,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 25.2M < 50.0M",
+            "최우선 호가 깊이 1.1K < 1.5K",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "AIGENSYNUSDT",
+          "quoteVolume": 24852738.38,
+          "spreadPct": 0.05542,
+          "topBookDepthUsdt": 232.39,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 24.9M < 50.0M",
+            "최우선 호가 깊이 232 < 1.5K",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "FIDAUSDT",
+          "quoteVolume": 24689011.13,
+          "spreadPct": 0.13024,
+          "topBookDepthUsdt": 137.04,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 24.7M < 50.0M",
+            "스프레드 0.130% > 0.08%",
+            "최우선 호가 깊이 137 < 1.5K",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "RLUSDUSDT",
+          "quoteVolume": 22348732.34,
+          "spreadPct": 0.00999,
+          "topBookDepthUsdt": 1820018.12,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 22.3M < 50.0M",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "UUSDT",
+          "quoteVolume": 21018561.59,
+          "spreadPct": 0.01,
+          "topBookDepthUsdt": 624413.05,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 21.0M < 50.0M",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "LTCUSDT",
+          "quoteVolume": 19644353.52,
+          "spreadPct": 0.0186,
+          "topBookDepthUsdt": 4896.25,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 19.6M < 50.0M",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "PAXGUSDT",
+          "quoteVolume": 17586532.56,
+          "spreadPct": 0.00022,
+          "topBookDepthUsdt": 2014.88,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 17.6M < 50.0M",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "AVAXUSDT",
+          "quoteVolume": 15866410.56,
+          "spreadPct": 0.10959,
+          "topBookDepthUsdt": 38726.81,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 15.9M < 50.0M",
+            "스프레드 0.110% > 0.08%",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "NEARUSDT",
+          "quoteVolume": 15697856.98,
+          "spreadPct": 0.06732,
+          "topBookDepthUsdt": 4233.76,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 15.7M < 50.0M",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "UNIUSDT",
+          "quoteVolume": 14824603.65,
+          "spreadPct": 0.02918,
+          "topBookDepthUsdt": 645.39,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 14.8M < 50.0M",
+            "최우선 호가 깊이 645 < 1.5K",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "XAUTUSDT",
+          "quoteVolume": 14465413.43,
+          "spreadPct": 0.00022,
+          "topBookDepthUsdt": 1095.04,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 14.5M < 50.0M",
+            "최우선 호가 깊이 1.1K < 1.5K",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "AAVEUSDT",
+          "quoteVolume": 13675770.82,
+          "spreadPct": 0.0113,
+          "topBookDepthUsdt": 1151.53,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 13.7M < 50.0M",
+            "최우선 호가 깊이 1.2K < 1.5K",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "LAYERUSDT",
+          "quoteVolume": 13544247.83,
+          "spreadPct": 0.11306,
+          "topBookDepthUsdt": 6738.63,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 13.5M < 50.0M",
+            "스프레드 0.113% > 0.08%",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "KAIAUSDT",
+          "quoteVolume": 12758354.32,
+          "spreadPct": 0.19474,
+          "topBookDepthUsdt": 1307.8,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 12.8M < 50.0M",
+            "스프레드 0.195% > 0.08%",
+            "최우선 호가 깊이 1.3K < 1.5K",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "OPENUSDT",
+          "quoteVolume": 11919756.85,
+          "spreadPct": 0.05175,
+          "topBookDepthUsdt": 31.22,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 11.9M < 50.0M",
+            "최우선 호가 깊이 31 < 1.5K",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "DASHUSDT",
+          "quoteVolume": 11814515.23,
+          "spreadPct": 0.0241,
+          "topBookDepthUsdt": 561.7,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 11.8M < 50.0M",
+            "최우선 호가 깊이 562 < 1.5K",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "EURUSDT",
+          "quoteVolume": 11244678.27,
+          "spreadPct": 0.00858,
+          "topBookDepthUsdt": 4209.51,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 11.2M < 50.0M",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "SHIBUSDT",
+          "quoteVolume": 10410693,
+          "spreadPct": 0.17621,
+          "topBookDepthUsdt": 17212.83,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 10.4M < 50.0M",
+            "스프레드 0.176% > 0.08%",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "CHZUSDT",
+          "quoteVolume": 10243150.28,
+          "spreadPct": 0.02111,
+          "topBookDepthUsdt": 5.12,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 10.2M < 50.0M",
+            "최우선 호가 깊이 5 < 1.5K",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "LUNCUSDT",
+          "quoteVolume": 10218630.3,
+          "spreadPct": 0.01315,
+          "topBookDepthUsdt": 40.1,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 10.2M < 50.0M",
+            "최우선 호가 깊이 40 < 1.5K",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "ONDOUSDT",
+          "quoteVolume": 9954376.46,
+          "spreadPct": 0.02943,
+          "topBookDepthUsdt": 333.18,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 10.0M < 50.0M",
+            "최우선 호가 깊이 333 < 1.5K",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "ENAUSDT",
+          "quoteVolume": 9897876.89,
+          "spreadPct": 0.09657,
+          "topBookDepthUsdt": 8947.33,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 9.9M < 50.0M",
+            "스프레드 0.097% > 0.08%",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "APTUSDT",
+          "quoteVolume": 9732506.42,
+          "spreadPct": 0.10805,
+          "topBookDepthUsdt": 10344.78,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 9.7M < 50.0M",
+            "스프레드 0.108% > 0.08%",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "XLMUSDT",
+          "quoteVolume": 8427311.09,
+          "spreadPct": 0.06768,
+          "topBookDepthUsdt": 2882.66,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 8.4M < 50.0M",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "ARBUSDT",
+          "quoteVolume": 8394032.39,
+          "spreadPct": 0.0861,
+          "topBookDepthUsdt": 3775.98,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 8.4M < 50.0M",
+            "스프레드 0.086% > 0.08%",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "PENGUUSDT",
+          "quoteVolume": 8377379.82,
+          "spreadPct": 0.01218,
+          "topBookDepthUsdt": 11.06,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 8.4M < 50.0M",
+            "최우선 호가 깊이 11 < 1.5K",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "FETUSDT",
+          "quoteVolume": 8250462.9,
+          "spreadPct": 0.0529,
+          "topBookDepthUsdt": 445.51,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 8.3M < 50.0M",
+            "최우선 호가 깊이 446 < 1.5K",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "TRUMPUSDT",
+          "quoteVolume": 7710541.23,
+          "spreadPct": 0.04853,
+          "topBookDepthUsdt": 742.13,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 7.7M < 50.0M",
+            "최우선 호가 깊이 742 < 1.5K",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "CHIPUSDT",
+          "quoteVolume": 7384500.67,
+          "spreadPct": 0.01997,
+          "topBookDepthUsdt": 157.72,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 7.4M < 50.0M",
+            "최우선 호가 깊이 158 < 1.5K",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "ICPUSDT",
+          "quoteVolume": 7172189.02,
+          "spreadPct": 0.03925,
+          "topBookDepthUsdt": 217.97,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 7.2M < 50.0M",
+            "최우선 호가 깊이 218 < 1.5K",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "ASTERUSDT",
+          "quoteVolume": 7063326.41,
+          "spreadPct": 0.15396,
+          "topBookDepthUsdt": 41024.85,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 7.1M < 50.0M",
+            "스프레드 0.154% > 0.08%",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "HBARUSDT",
+          "quoteVolume": 6858373.62,
+          "spreadPct": 0.01125,
+          "topBookDepthUsdt": 99.18,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 6.9M < 50.0M",
+            "최우선 호가 깊이 99 < 1.5K",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "FILUSDT",
+          "quoteVolume": 6753994.87,
+          "spreadPct": 0.10689,
+          "topBookDepthUsdt": 4584.72,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 6.8M < 50.0M",
+            "스프레드 0.107% > 0.08%",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "WLFIUSDT",
+          "quoteVolume": 6628314.44,
+          "spreadPct": 0.16681,
+          "topBookDepthUsdt": 4494.9,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 6.6M < 50.0M",
+            "스프레드 0.167% > 0.08%",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "INJUSDT",
+          "quoteVolume": 6619162.15,
+          "spreadPct": 0.02175,
+          "topBookDepthUsdt": 212.89,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 6.6M < 50.0M",
+            "최우선 호가 깊이 213 < 1.5K",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "DOTUSDT",
+          "quoteVolume": 6486473.42,
+          "spreadPct": 0.08147,
+          "topBookDepthUsdt": 1087.53,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 6.5M < 50.0M",
+            "스프레드 0.081% > 0.08%",
+            "최우선 호가 깊이 1.1K < 1.5K",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "KAITOUSDT",
+          "quoteVolume": 6230356.14,
+          "spreadPct": 0.06461,
+          "topBookDepthUsdt": 104.51,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 6.2M < 50.0M",
+            "최우선 호가 깊이 105 < 1.5K",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "DUSKUSDT",
+          "quoteVolume": 6200357.2,
+          "spreadPct": 0.06966,
+          "topBookDepthUsdt": 350.14,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 6.2M < 50.0M",
+            "최우선 호가 깊이 350 < 1.5K",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "GIGGLEUSDT",
+          "quoteVolume": 6095070.44,
+          "spreadPct": 0.06019,
+          "topBookDepthUsdt": 119,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 6.1M < 50.0M",
+            "최우선 호가 깊이 119 < 1.5K",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "FFUSDT",
+          "quoteVolume": 6087167.74,
+          "spreadPct": 0.02305,
+          "topBookDepthUsdt": 10.55,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 6.1M < 50.0M",
+            "최우선 호가 깊이 11 < 1.5K",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "SAGAUSDT",
+          "quoteVolume": 5964904.04,
+          "spreadPct": 0.04851,
+          "topBookDepthUsdt": 59.77,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 6.0M < 50.0M",
+            "최우선 호가 깊이 60 < 1.5K",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "VIRTUALUSDT",
+          "quoteVolume": 5779191.42,
+          "spreadPct": 0.01446,
+          "topBookDepthUsdt": 23.1,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 5.8M < 50.0M",
+            "최우선 호가 깊이 23 < 1.5K",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "WLDUSDT",
+          "quoteVolume": 5777668.85,
+          "spreadPct": 0.04282,
+          "topBookDepthUsdt": 1457.97,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 5.8M < 50.0M",
+            "최우선 호가 깊이 1.5K < 1.5K",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "ROBOUSDT",
+          "quoteVolume": 5721792.74,
+          "spreadPct": 0.09718,
+          "topBookDepthUsdt": 254.16,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 5.7M < 50.0M",
+            "스프레드 0.097% > 0.08%",
+            "최우선 호가 깊이 254 < 1.5K",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "ATOMUSDT",
+          "quoteVolume": 5576576.95,
+          "spreadPct": 0.04872,
+          "topBookDepthUsdt": 385.04,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 5.6M < 50.0M",
+            "최우선 호가 깊이 385 < 1.5K",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "CAKEUSDT",
+          "quoteVolume": 5473855.89,
+          "spreadPct": 0.07015,
+          "topBookDepthUsdt": 2634.18,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 5.5M < 50.0M",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "BIOUSDT",
+          "quoteVolume": 5415491.65,
+          "spreadPct": 0.27137,
+          "topBookDepthUsdt": 11084.08,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 5.4M < 50.0M",
+            "스프레드 0.271% > 0.08%",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "HYPERUSDT",
+          "quoteVolume": 5405206.89,
+          "spreadPct": 0.16181,
+          "topBookDepthUsdt": 221.93,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 5.4M < 50.0M",
+            "스프레드 0.162% > 0.08%",
+            "최우선 호가 깊이 222 < 1.5K",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "KITEUSDT",
+          "quoteVolume": 5399684.77,
+          "spreadPct": 0.08857,
+          "topBookDepthUsdt": 266.21,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 5.4M < 50.0M",
+            "스프레드 0.089% > 0.08%",
+            "최우선 호가 깊이 266 < 1.5K",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "XUSDUSDT",
+          "quoteVolume": 5322983.97,
+          "spreadPct": 0.01999,
+          "topBookDepthUsdt": 1667.67,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 5.3M < 50.0M",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "APEUSDT",
+          "quoteVolume": 5122942.88,
+          "spreadPct": 0.07045,
+          "topBookDepthUsdt": 111.31,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 5.1M < 50.0M",
+            "최우선 호가 깊이 111 < 1.5K",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "XPLUSDT",
+          "quoteVolume": 5092987.71,
+          "spreadPct": 0.12158,
+          "topBookDepthUsdt": 3452.11,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 5.1M < 50.0M",
+            "스프레드 0.122% > 0.08%",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "ZBTUSDT",
+          "quoteVolume": 4763657.95,
+          "spreadPct": 0.06103,
+          "topBookDepthUsdt": 169.16,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 4.8M < 50.0M",
+            "최우선 호가 깊이 169 < 1.5K",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "COOKIEUSDT",
+          "quoteVolume": 4622076.31,
+          "spreadPct": 0.50633,
+          "topBookDepthUsdt": 1284.03,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 4.6M < 50.0M",
+            "스프레드 0.506% > 0.08%",
+            "최우선 호가 깊이 1.3K < 1.5K",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "SEIUSDT",
+          "quoteVolume": 4584543.9,
+          "spreadPct": 0.01653,
+          "topBookDepthUsdt": 765.68,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 4.6M < 50.0M",
+            "최우선 호가 깊이 766 < 1.5K",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "CGPTUSDT",
+          "quoteVolume": 4581265.74,
+          "spreadPct": 0.0604,
+          "topBookDepthUsdt": 5.53,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 4.6M < 50.0M",
+            "최우선 호가 깊이 6 < 1.5K",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "BONKUSDT",
+          "quoteVolume": 4488368.93,
+          "spreadPct": 0.16793,
+          "topBookDepthUsdt": 12123.98,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 4.5M < 50.0M",
+            "스프레드 0.168% > 0.08%",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "ORDIUSDT",
+          "quoteVolume": 4418344.3,
+          "spreadPct": 0.02456,
+          "topBookDepthUsdt": 236.69,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 4.4M < 50.0M",
+            "최우선 호가 깊이 237 < 1.5K",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "TIAUSDT",
+          "quoteVolume": 4370982.58,
+          "spreadPct": 0.02637,
+          "topBookDepthUsdt": 304.42,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 4.4M < 50.0M",
+            "최우선 호가 깊이 304 < 1.5K",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "LDOUSDT",
+          "quoteVolume": 4322155.15,
+          "spreadPct": 0.0287,
+          "topBookDepthUsdt": 418.67,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 4.3M < 50.0M",
+            "최우선 호가 깊이 419 < 1.5K",
+            "펀딩 데이터 없음"
+          ]
+        },
+        {
+          "symbol": "DOGSUSDT",
+          "quoteVolume": 4110573,
+          "spreadPct": 0.18921,
+          "topBookDepthUsdt": 4362.51,
+          "fundingRatePct": 0,
+          "passed": false,
+          "reasons": [
+            "24시간 거래대금 4.1M < 50.0M",
+            "스프레드 0.189% > 0.08%",
+            "펀딩 데이터 없음"
+          ]
+        }
+      ]
+    },
+    "guardEvents": [
+      {
+        "time": 1778420535632,
+        "type": "daily-loss",
+        "message": "[risk] daily loss guard: equity below -2%"
+      },
+      {
+        "time": 1778414429364,
+        "type": "daily-loss",
+        "message": "[risk] daily loss guard: equity below -2%"
+      },
+      {
+        "time": 1778411253485,
+        "type": "daily-loss",
+        "message": "[risk] daily loss guard: equity below -2%"
+      },
+      {
+        "time": 1778407380233,
+        "type": "daily-loss",
+        "message": "[risk] daily loss guard: equity below -2%"
+      },
+      {
+        "time": 1778405422448,
+        "type": "daily-loss",
+        "message": "[risk] daily loss guard: equity below -2%"
+      },
+      {
+        "time": 1778404969949,
+        "type": "daily-loss",
+        "message": "[risk] daily loss guard: equity below -2%"
+      },
+      {
+        "time": 1778404833470,
+        "type": "daily-loss",
+        "message": "[risk] daily loss guard: equity below -2%"
+      }
+    ],
+    "errors": []
+  }
+}
