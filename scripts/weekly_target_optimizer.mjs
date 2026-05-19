@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 
 const API = 'https://fapi.binance.com/fapi/v1';
 
@@ -20,6 +20,7 @@ const SETTINGS = {
   targetWeeklyPct: 10,
   symbolLimit: Number(process.env.SYMBOL_LIMIT ?? 0),
   candleLimit: Number(process.env.CANDLE_LIMIT || 1500),
+  requestDelayMs: Number(process.env.REQUEST_DELAY_MS || 350),
   intervals: (process.env.INTERVALS || '3m,5m,15m').split(',').map(x => x.trim()).filter(Boolean),
   leverages: (process.env.LEVERAGES || '2,3,4,5').split(',').map(Number).filter(Boolean)
 };
@@ -88,7 +89,14 @@ async function main(){
       try{
         candles = await klines(symbol, interval, SETTINGS.candleLimit);
       }catch(err){
-        if(isRateLimit(err)) throw err;
+        if(isRateLimit(err)){
+          emitReport(buildReport(symbols, results, bestBySymbol, targetBySymbol, {
+            aborted:true,
+            abortReason:err.message,
+            stoppedAt:{symbol, interval, done, total}
+          }));
+          return;
+        }
         continue;
       }
       if(candles.length < 260) continue;
@@ -115,12 +123,24 @@ async function main(){
       }
       results.sort(compareResults);
       results.splice(180);
-      await sleep(80);
+      emitReport(buildReport(symbols, results, bestBySymbol, targetBySymbol, {
+        partial:true,
+        stoppedAt:{symbol, interval, done, total}
+      }), true);
+      await sleep(SETTINGS.requestDelayMs);
     }
   }
   process.stderr.write('\n');
-  results.sort(compareResults);
+  emitReport(buildReport(symbols, results, bestBySymbol, targetBySymbol, {
+    aborted:false,
+    completed:true
+  }));
+}
+
+function buildReport(symbols, rows, bestBySymbol, targetBySymbol, meta={}){
+  const results = rows.slice().sort(compareResults);
   const top = results.slice(0, 20);
+  results.sort(compareResults);
   const coverage = symbols.map(symbol => {
     const target = targetBySymbol.get(symbol) || null;
     const best = bestBySymbol.get(symbol) || null;
@@ -155,6 +175,7 @@ async function main(){
   }));
   const report = {
     generatedAt:new Date().toISOString(),
+    ...meta,
     settings:SETTINGS,
     symbols,
     best:top[0] || null,
@@ -180,7 +201,13 @@ async function main(){
     targetPass:pass.slice(0, 10),
     top
   };
-  console.log(JSON.stringify(report, null, 2));
+  return report;
+}
+
+function emitReport(report, quiet=false){
+  const text = JSON.stringify(report, null, 2);
+  if(process.env.OUTPUT_FILE) writeFileSync(process.env.OUTPUT_FILE, `${text}\n`, 'utf8');
+  if(!quiet) console.log(text);
 }
 
 async function topSymbols(limit){
@@ -253,7 +280,7 @@ async function klines(symbol, interval, limit){
     const oldest = Number(page[0][0]);
     if(!oldest || page.length < pageLimit) break;
     endTime = String(oldest - 1);
-    await sleep(45);
+    await sleep(Math.max(45, Math.floor(SETTINGS.requestDelayMs / 2)));
   }
   return rows.map(k => ({
     time:Number(k[0]), open:Number(k[1]), high:Number(k[2]), low:Number(k[3]), close:Number(k[4]),
