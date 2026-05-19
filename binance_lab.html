@@ -1180,6 +1180,41 @@
     };
     const ENTRY_CANDIDATES = [
       {
+        id:'weekly-target-breakout',
+        name:'주간 목표 압축 돌파',
+        tag:'목표',
+        interval:'3m',
+        side:'LONG',
+        leverage:4,
+        mode:'impulse',
+        fast:5,
+        slow:13,
+        pulse:1.62,
+        vwapLen:64,
+        breakout:15,
+        minAtr:.10,
+        maxAtr:3.5,
+        tp:.90,
+        sl:.33,
+        trail:.20,
+        maxHold:8,
+        minTrend:.03,
+        minBody:.30,
+        maxVwapDist:2.69,
+        minLongBuyRatio:.52,
+        maxShortBuyRatio:.48,
+        minRsiLong:44,
+        maxRsiLong:78,
+        minRsiShort:22,
+        maxRsiShort:56,
+        feePct:.04,
+        slipPct:.01,
+        spreadPct:.02,
+        marginPct:35,
+        maxPosition:1200000,
+        note:'100만원 기준 주간 10% 목표 탐색에서 통과한 3분봉 롱 돌파형 후보입니다. 시장가가 아니라 지정가/낮은 비용 체결을 전제로 검증했습니다.'
+      },
+      {
         id:'balanced-flow',
         name:'균형 추세 눌림',
         tag:'기본',
@@ -1876,16 +1911,17 @@
             let checked = 0;
             for(const params of paramsList){
               if(params.preferredInterval && s.interval === 'auto' && params.preferredInterval !== interval) continue;
+              const simSettings = settingsForParams(s, params);
               const ind = indicators(candles, params);
               for(const side of sides){
                 for(const lev of s.leverages){
                   if(state.cancel) break;
-                  const train = backtest(candles, params, side, lev, s, 0, splitTrain, false, ind);
-                  if(train.trades < Math.max(2, Math.floor(s.minTrades * .35))) continue;
-                  const test = backtest(candles, params, side, lev, s, splitTrain, splitValidation, false, ind);
-                  const final = backtest(candles, params, side, lev, s, splitValidation, candles.length, false, ind);
-                  const all = backtest(candles, params, side, lev, s, 0, candles.length, true, ind);
-                  const row = decorate(symbol, interval, candles.length, params, side, lev, train, test, final, all, s);
+                  const train = backtest(candles, params, side, lev, simSettings, 0, splitTrain, false, ind);
+                  if(train.trades < Math.max(2, Math.floor(simSettings.minTrades * .35))) continue;
+                  const test = backtest(candles, params, side, lev, simSettings, splitTrain, splitValidation, false, ind);
+                  const final = backtest(candles, params, side, lev, simSettings, splitValidation, candles.length, false, ind);
+                  const all = backtest(candles, params, side, lev, simSettings, 0, candles.length, true, ind);
+                  const row = decorate(symbol, interval, candles.length, params, side, lev, train, test, final, all, simSettings);
                   state.results.push(row);
                   checked++;
                 }
@@ -2939,6 +2975,11 @@
       els.trailPct.value = c.trail;
       els.maxHold.value = c.maxHold;
       els.leverages.value = String(c.leverage);
+      if(c.feePct != null) els.feePct.value = c.feePct;
+      if(c.slipPct != null) els.slipPct.value = c.slipPct;
+      if(c.spreadPct != null) els.spreadPct.value = c.spreadPct;
+      if(c.marginPct != null) els.marginPct.value = c.marginPct;
+      if(c.maxPosition != null) els.maxPosition.value = c.maxPosition;
       els.presetSelect.value = 'custom';
       saveSettings();
       toast(`${c.name} 진입법을 적용했습니다.`);
@@ -3645,6 +3686,11 @@
           maxRsiLong:v.id === 'runner' ? 82 : (base.maxRsiLong ?? 78),
           minRsiShort:v.id === 'runner' ? 18 : (base.minRsiShort ?? 22),
           maxRsiShort:base.maxRsiShort ?? 56,
+          feePct:base.feePct,
+          slipPct:base.slipPct,
+          spreadPct:base.spreadPct,
+          marginPct:base.marginPct,
+          maxPosition:base.maxPosition,
           note:`${base.note} ${v.note}`
         };
       }));
@@ -3661,6 +3707,14 @@
     function candidateDisplayName(id){
       const c = ENTRY_CANDIDATE_VARIANTS.find(x => x.id === id) || ENTRY_CANDIDATES.find(x => x.id === id);
       return c ? c.name : '';
+    }
+
+    function settingsForParams(s, params){
+      const out = {...s};
+      ['feePct','slipPct','spreadPct','marginPct','maxPosition'].forEach(key => {
+        if(params && params[key] != null) out[key] = Number(params[key]);
+      });
+      return out;
     }
 
     function candidateToParams(c){
@@ -3688,7 +3742,12 @@
         minRsiLong:number(c.minRsiLong, 44),
         maxRsiLong:number(c.maxRsiLong, 78),
         minRsiShort:number(c.minRsiShort, 22),
-        maxRsiShort:number(c.maxRsiShort, 56)
+        maxRsiShort:number(c.maxRsiShort, 56),
+        feePct:c.feePct,
+        slipPct:c.slipPct,
+        spreadPct:c.spreadPct,
+        marginPct:c.marginPct,
+        maxPosition:c.maxPosition
       };
     }
 
