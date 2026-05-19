@@ -1937,7 +1937,10 @@
       const base = {
         mode:isAutoMode ? 'pullback' : s.mode,
         fast:s.fast, slow:s.slow, pulse:s.pulse, tp:s.tp, sl:s.sl, maxHold:s.maxHold,
-        trail:s.trail, breakout:s.breakout, minAtr:s.minAtr, maxAtr:s.maxAtr, vwapLen:s.vwapLen
+        trail:s.trail, breakout:s.breakout, minAtr:s.minAtr, maxAtr:s.maxAtr, vwapLen:s.vwapLen,
+        minTrend:.035, minBody:.34, maxVwapDist:2.4,
+        minLongBuyRatio:.52, maxShortBuyRatio:.48,
+        minRsiLong:44, maxRsiLong:78, minRsiShort:22, maxRsiShort:56
       };
       if(s.grid === 'fixed' && !isAutoMode) return [base];
       const modes = isAutoMode ? ['pullback','impulse','reclaim','breakout'] : [s.mode];
@@ -2064,17 +2067,34 @@
       const atrPct = c.close ? ind.atr[i] / c.close * 100 : 0;
       const pulse = ind.avgQuote[i-1] ? c.quoteVolume / ind.avgQuote[i-1] : 1;
       const buyRatio = c.quoteVolume ? c.takerBuyQuote / c.quoteVolume : .5;
+      const trendGap = c.close ? Math.abs(ind.emaFast[i] - ind.emaSlow[i]) / c.close * 100 : 0;
+      const vwapDist = c.close ? Math.abs(c.close - ind.vwap[i]) / c.close * 100 : 0;
+      const range = Math.max(0, c.high - c.low);
+      const bodyRatio = range ? Math.abs(c.close - c.open) / range : 0;
+      const topWick = range ? (c.high - Math.max(c.open, c.close)) / range : 0;
+      const bottomWick = range ? (Math.min(c.open, c.close) - c.low) / range : 0;
+      const minTrend = number(p.minTrend, Math.max(.03, p.minAtr * .35));
+      const minBody = number(p.minBody, .34);
+      const maxVwapDist = number(p.maxVwapDist, Math.max(1.2, p.maxAtr * 1.15));
+      const minLongBuyRatio = number(p.minLongBuyRatio, .52);
+      const maxShortBuyRatio = number(p.maxShortBuyRatio, .48);
+      const minRsiLong = number(p.minRsiLong, 44);
+      const maxRsiLong = number(p.maxRsiLong, 78);
+      const minRsiShort = number(p.minRsiShort, 22);
+      const maxRsiShort = number(p.maxRsiShort, 56);
       const longTrend = c.close > ind.emaFast[i] && ind.emaFast[i] > ind.emaSlow[i] && c.close > ind.vwap[i];
       const shortTrend = c.close < ind.emaFast[i] && ind.emaFast[i] < ind.emaSlow[i] && c.close < ind.vwap[i];
-      const baseOk = pulse >= p.pulse && atrPct >= p.minAtr && atrPct <= p.maxAtr;
+      const baseOk = Number.isFinite(atrPct) && Number.isFinite(pulse) && Number.isFinite(ind.rsi[i]) &&
+        pulse >= p.pulse && atrPct >= p.minAtr && atrPct <= p.maxAtr &&
+        trendGap >= minTrend && vwapDist <= maxVwapDist && bodyRatio >= minBody;
       if(side === 'LONG'){
-        if(!baseOk || !longTrend || buyRatio < .50 || c.close <= c.open) return false;
+        if(!baseOk || !longTrend || buyRatio < minLongBuyRatio || c.close <= c.open || topWick > .48 || ind.rsi[i] < minRsiLong || ind.rsi[i] > maxRsiLong) return false;
         if(p.mode === 'impulse') return pctMove(c, prev) >= .18 && closeNearHigh(c);
         if(p.mode === 'pullback') return prev.low <= ind.emaFast[i-1] * 1.002 && c.close > ind.emaFast[i];
         if(p.mode === 'reclaim') return prev.close < ind.vwap[i-1] && c.close > ind.vwap[i];
         return c.close > ind.high[i-1] * 1.0002;
       }
-      if(!baseOk || !shortTrend || buyRatio > .50 || c.close >= c.open) return false;
+      if(!baseOk || !shortTrend || buyRatio > maxShortBuyRatio || c.close >= c.open || bottomWick > .48 || ind.rsi[i] < minRsiShort || ind.rsi[i] > maxRsiShort) return false;
       if(p.mode === 'impulse') return pctMove(c, prev) <= -.18 && closeNearLow(c);
       if(p.mode === 'pullback') return prev.high >= ind.emaFast[i-1] * .998 && c.close < ind.emaFast[i];
       if(p.mode === 'reclaim') return prev.close > ind.vwap[i-1] && c.close < ind.vwap[i];
@@ -2110,6 +2130,8 @@
       let grossLoss = 0;
       let liquidations = 0;
       let sumNetRet = 0;
+      let consecutiveLosses = 0;
+      let maxLossStreak = 0;
       const tradeRows = [];
       const equity = [{i:rangeStart, value:cash}];
       const drawdowns = [];
@@ -2186,7 +2208,15 @@
         trades++;
         sumNetRet += netRet;
         if(liquidated) liquidations++;
-        if(pnl >= 0){ wins++; grossWin += pnl; } else grossLoss += Math.abs(pnl);
+        if(pnl >= 0){
+          wins++;
+          grossWin += pnl;
+          consecutiveLosses = 0;
+        }else{
+          grossLoss += Math.abs(pnl);
+          consecutiveLosses++;
+          maxLossStreak = Math.max(maxLossStreak, consecutiveLosses);
+        }
         equity.push({i:exitIdx, value:cash});
         drawdowns.push({i:exitIdx, value:peak ? (peak - cash) / peak * 100 : 0});
         if(collectTrades){
@@ -2207,6 +2237,7 @@
         winRate:trades ? wins / trades * 100 : 0,
         pf:grossLoss ? grossWin / grossLoss : grossWin ? 99 : 0,
         avgRet:trades ? sumNetRet / trades : 0,
+        maxLossStreak,
         equity,
         drawdowns,
         tradeRows
@@ -2218,28 +2249,36 @@
       const pfs = [train.pf, test.pf, final.pf];
       const dds = [train.maxDd, test.maxDd, final.maxDd];
       const liqs = [train.liquidations, test.liquidations, final.liquidations];
+      const avgTradeRets = [train.avgRet, test.avgRet, final.avgRet];
       const avgReturn = mean(returns);
       const worstReturn = Math.min(...returns);
       const spreadReturn = Math.max(...returns) - worstReturn;
       const returnStd = stdev(returns);
       const minSplitPf = Math.min(...pfs);
+      const minAvgTradeRet = Math.min(...avgTradeRets);
       const maxSplitDd = Math.max(...dds);
+      const costHurdle = estimatedRoundTripCostPct(s) * 1.15;
       const consistencyPenalty = returnStd * 1.25 + spreadReturn * .32;
       const ddPenalty = mean(dds) * .75 + maxSplitDd * .75;
       const liqPenalty = liqs.reduce((sum, value) => sum + value, 0) * 40;
+      const leveragePenalty = Math.max(0, leverage - 5) * .85;
+      const streakPenalty = Math.max(0, (all.maxLossStreak || 0) - 3) * 4;
+      const edgePenalty = Math.max(0, costHurdle - minAvgTradeRet) * 18;
       const lossPenalty = returns.reduce((sum, value) => sum + (value <= 0 ? 18 : 0), 0) +
         pfs.reduce((sum, value) => sum + (value < s.minPf ? 7 : 0), 0) +
         dds.reduce((sum, value) => sum + (value > s.maxDd ? 18 : 0), 0);
       const tradeBonus = Math.min(test.trades, 34) * .025 + Math.min(train.trades, 80) * .003 + Math.min(final.trades, 34) * .025;
       const pfBonus = Math.min(8, Math.max(0, minSplitPf - 1) * 4);
-      const score = worstReturn * 1.75 + avgReturn * .45 + tradeBonus + pfBonus - ddPenalty - consistencyPenalty - lossPenalty - liqPenalty;
+      const finalBonus = final.returnPct > 0 ? Math.min(10, final.returnPct * .2) : final.returnPct * 1.2;
+      const score = worstReturn * 1.9 + avgReturn * .36 + finalBonus + tradeBonus + pfBonus - ddPenalty - consistencyPenalty - lossPenalty - liqPenalty - leveragePenalty - streakPenalty - edgePenalty;
       const minTestTrades = Math.max(2, Math.floor(s.minTrades * .35));
-      const finalPass = final.returnPct > 0 && final.pf >= s.minPf && final.maxDd <= s.maxDd && (!s.rejectLiq || final.liquidations === 0);
-      const validationPass = train.returnPct > 0 && test.returnPct > 0 && train.pf >= s.minPf && test.pf >= s.minPf &&
+      const minFinalTrades = Math.max(1, Math.floor(s.minTrades * .25));
+      const finalPass = final.returnPct > 0 && final.avgRet > costHurdle && final.trades >= minFinalTrades && final.pf >= s.minPf && final.maxDd <= s.maxDd && (!s.rejectLiq || final.liquidations === 0);
+      const validationPass = train.returnPct > 0 && test.returnPct > 0 && train.avgRet > costHurdle && test.avgRet > costHurdle && train.pf >= s.minPf && test.pf >= s.minPf &&
         all.trades >= s.minTrades && test.trades >= minTestTrades && train.maxDd <= s.maxDd && test.maxDd <= s.maxDd &&
         (!s.rejectLiq || (train.liquidations === 0 && test.liquidations === 0));
       const tradable = validationPass && finalPass;
-      const balance = {avgReturn, worstReturn, spreadReturn, returnStd, minSplitPf, maxSplitDd};
+      const balance = {avgReturn, worstReturn, spreadReturn, returnStd, minSplitPf, maxSplitDd, minAvgTradeRet, costHurdle};
       return {symbol, interval, candleCount, params:{...params}, side, leverage, train, test, final, all, score, balance, tradable, validationPass, finalPass};
     }
 
@@ -2401,6 +2440,7 @@
         ['전략', strategyName(row.params)],
         ['학습 / 검증 / 최종', `${fmtPct(row.train.returnPct)} / ${fmtPct(row.test.returnPct)} / ${fmtPct(row.final.returnPct)}`],
         ['최저 구간 / 편차', `${fmtPct(row.balance?.worstReturn ?? Math.min(row.train.returnPct, row.test.returnPct, row.final.returnPct))} / ${fmtPct(row.balance?.returnStd ?? stdev([row.train.returnPct, row.test.returnPct, row.final.returnPct]))}`],
+        ['거래당 엣지 / 비용 기준', `${fmtPct(row.balance?.minAvgTradeRet ?? Math.min(row.train.avgRet, row.test.avgRet, row.final.avgRet))} / ${fmtPct(row.balance?.costHurdle ?? estimatedRoundTripCostPct(readSettings()) * 1.15)}`],
         ['균형 점수', row.score.toFixed(1)],
         ['검증 판정', row.validationPass ? '통과' : '주의'],
         ['최종 홀드아웃', row.finalPass ? '통과' : '주의'],
@@ -2871,6 +2911,7 @@
           <div class="candidate-top"><span>${c.name}</span><span class="pill ok">${c.tag}</span></div>
           <div class="candidate-sub">${c.interval} ${sideName(c.side)} ${c.leverage}x ${modeName(c.mode)} · ${c.variant} · EMA ${c.fast}/${c.slow} · VWAP ${c.vwapLen}</div>
           <div class="candidate-sub">익절 ${c.tp}% · 손절 ${c.sl}% · 트레일 ${c.trail}% · 거래량 ${c.pulse}배</div>
+          <div class="candidate-sub">품질필터 추세 ${c.minTrend ?? .035}% · 몸통 ${c.minBody ?? .34} · VWAP 과열 ${c.maxVwapDist ?? 2.4}%</div>
           <div class="candidate-sub">${c.note}</div>
         </div>
       `).join('');
@@ -3416,13 +3457,14 @@
       lines.push(`- 전략: ${modeName(s.mode)} / EMA ${s.fast}/${s.slow} / 거래량 ${s.pulse}배`);
       lines.push(`- 청산: 익절 ${s.tp}%, 손절 ${s.sl}%, 트레일 ${s.trail}%, 최대 보유봉 ${s.maxHold}`);
       lines.push(`- 리스크: 레버리지 ${s.leverages.join(',')}x, 증거금 ${s.marginPct}%, 최대 포지션 ${s.maxPosition} USDT, 수수료 ${s.feePct}%, 슬리피지 ${s.slipPct}%, 스프레드 ${s.spreadPct}%, 펀딩 8h ${s.funding8hPct}%`);
-      lines.push('- 검증 구조: 학습 55% / 검증 23% / 최종 22%. 균형 점수는 세 구간을 모두 반영하며, 최저 구간 수익률과 구간 편차를 강하게 봅니다.');
+      lines.push('- 검증 구조: 학습 55% / 검증 23% / 최종 22%. 균형 점수는 세 구간, 거래당 엣지, 비용 기준, 연속 손실, 레버리지 위험을 함께 봅니다.');
       lines.push('');
       if(best){
         lines.push('## 최고 후보');
         lines.push(`- ${best.symbol} ${best.interval} ${sideName(best.side)} ${best.leverage}x ${strategyName(best.params)}`);
         lines.push(`- 전체 ${fmtPct(best.all.returnPct)}, 학습 ${fmtPct(best.train.returnPct)}, 검증 ${fmtPct(best.test.returnPct)}, 최종 ${fmtPct(best.final.returnPct)} (${best.tradable ? '실전 후보 통과' : best.validationPass ? '최종 주의' : '검증 주의'})`);
         lines.push(`- 균형 점수 ${best.score.toFixed(1)}, 최저 구간 ${fmtPct(best.balance?.worstReturn ?? Math.min(best.train.returnPct, best.test.returnPct, best.final.returnPct))}, 구간 편차 ${fmtPct(best.balance?.returnStd ?? stdev([best.train.returnPct, best.test.returnPct, best.final.returnPct]))}`);
+        lines.push(`- 거래당 최저 엣지 ${fmtPct(best.balance?.minAvgTradeRet ?? Math.min(best.train.avgRet, best.test.avgRet, best.final.avgRet))}, 비용 기준 ${fmtPct(best.balance?.costHurdle ?? estimatedRoundTripCostPct(s) * 1.15)}, 최대 연속손실 ${best.all.maxLossStreak || 0}회`);
         lines.push(`- 최대 낙폭 ${best.all.maxDd.toFixed(2)}%, 거래 ${best.all.trades}, 승률 ${best.all.winRate.toFixed(1)}%, 수익 팩터 ${best.all.pf.toFixed(2)}, 청산 ${best.all.liquidations}`);
         lines.push('');
       }
@@ -3465,7 +3507,7 @@
 
     function exportCsv(){
       if(!state.results.length){ toast('내보낼 결과가 없습니다.'); return; }
-      const head = ['rank','symbol','interval','side','strategy','leverage','allReturn','trainReturn','testReturn','finalReturn','worstSplitReturn','splitStd','mdd','trades','winRate','pf','liquidations','balanceScore','validationPass','finalPass','tradable'];
+      const head = ['rank','symbol','interval','side','strategy','leverage','allReturn','trainReturn','testReturn','finalReturn','worstSplitReturn','splitStd','minAvgTradeRet','costHurdle','maxLossStreak','mdd','trades','winRate','pf','liquidations','balanceScore','validationPass','finalPass','tradable'];
       const lines = [head.join(',')];
       state.results.filter(r => !r.system).forEach((r,i) => {
         lines.push([
@@ -3473,6 +3515,9 @@
           r.all.returnPct.toFixed(4),r.train.returnPct.toFixed(4),r.test.returnPct.toFixed(4),r.final.returnPct.toFixed(4),
           (r.balance?.worstReturn ?? Math.min(r.train.returnPct, r.test.returnPct, r.final.returnPct)).toFixed(4),
           (r.balance?.returnStd ?? stdev([r.train.returnPct, r.test.returnPct, r.final.returnPct])).toFixed(4),
+          (r.balance?.minAvgTradeRet ?? Math.min(r.train.avgRet, r.test.avgRet, r.final.avgRet)).toFixed(4),
+          (r.balance?.costHurdle ?? estimatedRoundTripCostPct(readSettings()) * 1.15).toFixed(4),
+          r.all.maxLossStreak || 0,
           r.all.maxDd.toFixed(4),r.all.trades,r.all.winRate.toFixed(2),r.all.pf.toFixed(4),r.all.liquidations,r.score.toFixed(4),r.validationPass?'Y':'N',r.finalPass?'Y':'N',r.tradable?'Y':'N'
         ].join(','));
       });
@@ -3518,7 +3563,16 @@
         breakout:s.breakout,
         minAtr:s.minAtr,
         maxAtr:s.maxAtr,
-        vwapLen:s.vwapLen
+        vwapLen:s.vwapLen,
+        minTrend:.035,
+        minBody:.34,
+        maxVwapDist:2.4,
+        minLongBuyRatio:.52,
+        maxShortBuyRatio:.48,
+        minRsiLong:44,
+        maxRsiLong:78,
+        minRsiShort:22,
+        maxRsiShort:56
       };
     }
 
@@ -3582,6 +3636,15 @@
           trail:roundCandidate(Math.max(0, base.trail * (v.trail || 1))),
           maxHold:Math.max(4, Math.round(base.maxHold * (v.hold || 1))),
           breakout:Math.max(8, Math.round(base.breakout + (v.breakout || 0))),
+          minTrend:roundCandidate((base.minTrend ?? .035) * (v.id === 'early' ? .85 : v.id === 'confirm' ? 1.25 : v.id === 'runner' ? 1.15 : 1)),
+          minBody:roundCandidate((base.minBody ?? .34) * (v.id === 'early' ? .9 : v.id === 'confirm' ? 1.12 : v.id === 'runner' ? 1.05 : 1)),
+          maxVwapDist:roundCandidate((base.maxVwapDist ?? 2.4) * (v.id === 'early' ? 1.08 : v.id === 'confirm' ? .88 : v.id === 'runner' ? 1.18 : 1)),
+          minLongBuyRatio:roundCandidate((base.minLongBuyRatio ?? .52) + (v.id === 'confirm' ? .03 : v.id === 'runner' ? .02 : 0)),
+          maxShortBuyRatio:roundCandidate((base.maxShortBuyRatio ?? .48) - (v.id === 'confirm' ? .03 : v.id === 'runner' ? .02 : 0)),
+          minRsiLong:base.minRsiLong ?? 44,
+          maxRsiLong:v.id === 'runner' ? 82 : (base.maxRsiLong ?? 78),
+          minRsiShort:v.id === 'runner' ? 18 : (base.minRsiShort ?? 22),
+          maxRsiShort:base.maxRsiShort ?? 56,
           note:`${base.note} ${v.note}`
         };
       }));
@@ -3616,7 +3679,16 @@
         vwapLen:c.vwapLen,
         source:c.id,
         preferredInterval:c.interval,
-        variant:c.variant || c.tag
+        variant:c.variant || c.tag,
+        minTrend:number(c.minTrend, .035),
+        minBody:number(c.minBody, .34),
+        maxVwapDist:number(c.maxVwapDist, 2.4),
+        minLongBuyRatio:number(c.minLongBuyRatio, .52),
+        maxShortBuyRatio:number(c.maxShortBuyRatio, .48),
+        minRsiLong:number(c.minRsiLong, 44),
+        maxRsiLong:number(c.maxRsiLong, 78),
+        minRsiShort:number(c.minRsiShort, 22),
+        maxRsiShort:number(c.maxRsiShort, 56)
       };
     }
 
@@ -3632,7 +3704,7 @@
     function dedupeParamGrid(rows){
       const seen = new Set();
       return rows.filter(row => {
-        const key = ['mode','fast','slow','pulse','tp','sl','trail','maxHold','breakout','minAtr','maxAtr','vwapLen','preferredInterval']
+        const key = ['mode','fast','slow','pulse','tp','sl','trail','maxHold','breakout','minAtr','maxAtr','vwapLen','preferredInterval','minTrend','minBody','maxVwapDist','minLongBuyRatio','maxShortBuyRatio','minRsiLong','maxRsiLong','minRsiShort','maxRsiShort']
           .map(k => row[k]).join('|');
         if(seen.has(key)) return false;
         seen.add(key);
@@ -3699,8 +3771,13 @@
     function gridName(grid){
       return grid === 'auto' ? '자동 최적' : grid === 'fast' ? '빠른 탐색' : grid === 'deep' ? '넓은 탐색' : '고정 조건';
     }
-    function emptySim(){ return {returnPct:0, finalEquity:0, maxDd:0, trades:0, liquidations:0, winRate:0, pf:0, avgRet:0, equity:[], drawdowns:[], tradeRows:[]}; }
+    function emptySim(){ return {returnPct:0, finalEquity:0, maxDd:0, trades:0, liquidations:0, winRate:0, pf:0, avgRet:0, maxLossStreak:0, equity:[], drawdowns:[], tradeRows:[]}; }
     function liquidationAdversePct(leverage){ return Math.max(.05, 100 / Math.max(1, leverage) - .65 - .20); }
+    function estimatedRoundTripCostPct(s){
+      return Math.max(0, number(s.feePct, 0)) +
+        Math.max(0, number(s.slipPct, 0)) * 2 +
+        Math.max(0, number(s.spreadPct, 0));
+    }
     function executionHalfSpreadPct(s){ return Math.max(0, number(s.spreadPct, 0)) / 2; }
     function entryFillPrice(price, side, s){
       const cost = (Math.max(0, number(s.slipPct, 0)) + executionHalfSpreadPct(s)) / 100;
