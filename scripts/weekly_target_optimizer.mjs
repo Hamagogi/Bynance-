@@ -31,7 +31,9 @@ const BASE_CANDIDATES = [
   {id:'compression-breakout', interval:'3m', mode:'impulse', fast:5, slow:13, pulse:1.8, vwapLen:64, breakout:20, minAtr:.10, maxAtr:3.5, tp:1.15, sl:.42, trail:.25, maxHold:12},
   {id:'vwap-reclaim', interval:'5m', mode:'reclaim', fast:8, slow:21, pulse:1.12, vwapLen:144, breakout:14, minAtr:.04, maxAtr:2.2, tp:1.05, sl:.38, trail:.25, maxHold:18},
   {id:'slow-trend', interval:'15m', mode:'pullback', fast:12, slow:34, pulse:1.10, vwapLen:96, breakout:24, minAtr:.05, maxAtr:1.8, tp:2.2, sl:.75, trail:.50, maxHold:48},
-  {id:'failure-breakout', interval:'5m', mode:'breakout', fast:8, slow:21, pulse:1.45, vwapLen:96, breakout:30, minAtr:.08, maxAtr:3.0, tp:1.35, sl:.50, trail:.30, maxHold:16}
+  {id:'failure-breakout', interval:'5m', mode:'breakout', fast:8, slow:21, pulse:1.45, vwapLen:96, breakout:30, minAtr:.08, maxAtr:3.0, tp:1.35, sl:.50, trail:.30, maxHold:16},
+  {id:'vwap-fade', interval:'5m', mode:'meanrevert', fast:8, slow:21, pulse:1.08, vwapLen:96, breakout:18, minAtr:.04, maxAtr:2.6, tp:.82, sl:.34, trail:.16, maxHold:10, minTrendBase:.01, minBodyBase:.18, maxVwapDistBase:3.4, minLongBuyRatio:.38, maxShortBuyRatio:.62, minRsiLong:18, maxRsiLong:44, minRsiShort:56, maxRsiShort:82},
+  {id:'exhaustion-fade', interval:'3m', mode:'meanrevert', fast:5, slow:13, pulse:1.38, vwapLen:72, breakout:16, minAtr:.07, maxAtr:3.2, tp:.94, sl:.38, trail:.18, maxHold:9, minTrendBase:.01, minBodyBase:.20, maxVwapDistBase:3.8, minLongBuyRatio:.36, maxShortBuyRatio:.64, minRsiLong:16, maxRsiLong:42, minRsiShort:58, maxRsiShort:84}
 ];
 
 const VARIANTS = [
@@ -55,15 +57,15 @@ function buildParamGrid(){
         trail:round(Math.max(0, b.trail * v.trail)),
         maxHold:Math.max(4, Math.round(b.maxHold * v.hold)),
         breakout:Math.max(8, Math.round(b.breakout + v.breakout)),
-        minTrend:round(.035 * v.minTrend),
-        minBody:round(.34 * v.minBody),
-        maxVwapDist:round(2.4 * v.maxVwapDist),
-        minLongBuyRatio:v.id === 'confirm' || v.id === 'scalp-tight' ? .55 : v.id === 'runner' ? .54 : .52,
-        maxShortBuyRatio:v.id === 'confirm' || v.id === 'scalp-tight' ? .45 : v.id === 'runner' ? .46 : .48,
-        minRsiLong:44,
-        maxRsiLong:v.id === 'runner' ? 82 : 78,
-        minRsiShort:v.id === 'runner' ? 18 : 22,
-        maxRsiShort:56
+        minTrend:round((b.minTrendBase ?? .035) * v.minTrend),
+        minBody:round((b.minBodyBase ?? .34) * v.minBody),
+        maxVwapDist:round((b.maxVwapDistBase ?? 2.4) * v.maxVwapDist),
+        minLongBuyRatio:b.minLongBuyRatio ?? (v.id === 'confirm' || v.id === 'scalp-tight' ? .55 : v.id === 'runner' ? .54 : .52),
+        maxShortBuyRatio:b.maxShortBuyRatio ?? (v.id === 'confirm' || v.id === 'scalp-tight' ? .45 : v.id === 'runner' ? .46 : .48),
+        minRsiLong:b.minRsiLong ?? 44,
+        maxRsiLong:b.maxRsiLong ?? (v.id === 'runner' ? 82 : 78),
+        minRsiShort:b.minRsiShort ?? (v.id === 'runner' ? 18 : 22),
+        maxRsiShort:b.maxRsiShort ?? 56
       });
     }
   }
@@ -311,6 +313,19 @@ function entry(candles, ind, i, p, side){
   const baseOk = Number.isFinite(atrPct) && Number.isFinite(pulse) && Number.isFinite(ind.rsi[i]) &&
     pulse >= p.pulse && atrPct >= p.minAtr && atrPct <= p.maxAtr &&
     trendGap >= p.minTrend && vwapDist <= p.maxVwapDist && bodyRatio >= p.minBody;
+  if(p.mode === 'meanrevert'){
+    if(!baseOk || !Number.isFinite(ind.vwap[i])) return false;
+    if(side === 'LONG'){
+      return c.close < ind.vwap[i] && c.low <= ind.low[i-1] * 1.0004 &&
+        bottomWick >= .22 && buyRatio >= p.minLongBuyRatio &&
+        ind.rsi[i] >= p.minRsiLong && ind.rsi[i] <= p.maxRsiLong &&
+        (c.close > c.open || c.close > prev.close);
+    }
+    return c.close > ind.vwap[i] && c.high >= ind.high[i-1] * .9996 &&
+      topWick >= .22 && buyRatio <= p.maxShortBuyRatio &&
+      ind.rsi[i] >= p.minRsiShort && ind.rsi[i] <= p.maxRsiShort &&
+      (c.close < c.open || c.close < prev.close);
+  }
   if(side === 'LONG'){
     if(!baseOk || !longTrend || buyRatio < p.minLongBuyRatio || c.close <= c.open || topWick > .48 || ind.rsi[i] < p.minRsiLong || ind.rsi[i] > p.maxRsiLong) return false;
     if(p.mode === 'impulse') return pctMove(c, prev) >= .18 && closeNearHigh(c);
