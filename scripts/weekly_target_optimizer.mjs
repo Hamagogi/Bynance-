@@ -104,6 +104,7 @@ async function main(){
             const final = backtest(candles, params, side, leverage, SETTINGS, splitValidation, candles.length, false, ind);
             const all = backtest(candles, params, side, leverage, SETTINGS, 0, candles.length, false, ind);
             const row = decorate(symbol, interval, candles, params, side, leverage, train, test, final, all, SETTINGS);
+            if(row.targetPass) attachStressResult(row, candles, params, side, leverage, SETTINGS, ind);
             if(row.score > -100) {
               results.push(row);
               updateBest(bestBySymbol, symbol, row);
@@ -214,6 +215,31 @@ async function topSymbols(limit){
 function updateBest(map, symbol, row){
   const current = map.get(symbol);
   if(!current || compareResults(row, current) < 0) map.set(symbol, row);
+}
+
+function attachStressResult(row, candles, params, side, leverage, settings, ind){
+  const stressed = stressSettings(settings);
+  const stress = backtest(candles, params, side, leverage, stressed, 0, candles.length, false, ind);
+  row.stress = stress;
+  row.stressPass = stress.returnPct > 0 &&
+    stress.avgRet > estimatedRoundTripCostPct(stressed) * 1.05 &&
+    stress.pf >= Math.max(1.15, settings.minPf - .1) &&
+    stress.maxDd <= settings.maxDd * 1.1 &&
+    stress.liquidations === 0 &&
+    stress.maxLossStreak <= 4;
+  row.targetPass = row.targetPass && row.stressPass;
+}
+
+function stressSettings(settings){
+  return {
+    ...settings,
+    feePct:settings.feePct * 1.25,
+    slipPct:settings.slipPct * 1.8,
+    spreadPct:settings.spreadPct * 1.8,
+    funding8hPct:settings.funding8hPct * 1.5,
+    marginPct:settings.marginPct * .85,
+    maxPosition:settings.maxPosition * .85
+  };
 }
 
 async function klines(symbol, interval, limit){
@@ -436,8 +462,14 @@ function decorate(symbol, interval, candles, params, side, leverage, train, test
     train.pf >= s.minPf && test.pf >= s.minPf && all.trades >= s.minTrades && train.maxDd <= s.maxDd && test.maxDd <= s.maxDd &&
     (!s.rejectLiq || (train.liquidations === 0 && test.liquidations === 0));
   const finalPass = final.returnPct > 0 && final.avgRet > costHurdle && final.pf >= s.minPf && final.maxDd <= s.maxDd && (!s.rejectLiq || final.liquidations === 0);
-  const targetPass = validationPass && finalPass && finalWeeklyPct >= s.targetWeeklyPct && allWeeklyPct > 0 && all.maxLossStreak <= 4;
-  return {symbol, interval, side, leverage, params, train, test, final, all, finalWeeklyPct, allWeeklyPct, score, validationPass, finalPass, targetPass, minAvgTradeRet, costHurdle};
+  const stabilityPass = worstReturn > 0 &&
+    returnStd <= Math.max(4, Math.abs(avgReturn) * 1.4) &&
+    maxSplitDd <= s.maxDd &&
+    all.maxLossStreak <= 3 &&
+    all.liquidations === 0 &&
+    all.trades >= s.minTrades;
+  const targetPass = validationPass && finalPass && stabilityPass && finalWeeklyPct >= s.targetWeeklyPct && allWeeklyPct >= Math.min(3, s.targetWeeklyPct * .35);
+  return {symbol, interval, side, leverage, params, train, test, final, all, finalWeeklyPct, allWeeklyPct, score, validationPass, finalPass, stabilityPass, targetPass, minAvgTradeRet, costHurdle};
 }
 
 function compareResults(a,b){

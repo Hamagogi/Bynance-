@@ -1353,6 +1353,36 @@
         trail:.30,
         maxHold:16,
         note:'큰 거래량 돌파가 이어질 때만 추세에 탑승하고, 조건이 약하면 후보에서 밀리도록 설계했습니다.'
+      },
+      {
+        id:'vwap-fade',
+        name:'VWAP 과열 되돌림',
+        tag:'방어',
+        interval:'5m',
+        side:'BOTH',
+        leverage:2,
+        mode:'meanrevert',
+        fast:8,
+        slow:21,
+        pulse:1.08,
+        vwapLen:96,
+        breakout:18,
+        minAtr:.04,
+        maxAtr:2.6,
+        tp:.82,
+        sl:.34,
+        trail:.16,
+        maxHold:10,
+        minTrend:.01,
+        minBody:.18,
+        maxVwapDist:3.4,
+        minLongBuyRatio:.38,
+        maxShortBuyRatio:.62,
+        minRsiLong:18,
+        maxRsiLong:44,
+        minRsiShort:56,
+        maxRsiShort:82,
+        note:'추세형 신호가 적은 코인을 위해 VWAP에서 과하게 벌어진 뒤 꼬리와 RSI가 식는 구간만 되돌림 후보로 봅니다.'
       }
     ];
     const ENTRY_CANDIDATE_VARIANTS = expandEntryCandidates(ENTRY_CANDIDATES);
@@ -2014,7 +2044,7 @@
         minRsiLong:44, maxRsiLong:78, minRsiShort:22, maxRsiShort:56
       };
       if(s.grid === 'fixed' && !isAutoMode) return [base];
-      const modes = isAutoMode ? ['pullback','impulse','reclaim','breakout'] : [s.mode];
+      const modes = isAutoMode ? ['pullback','impulse','reclaim','breakout','meanrevert'] : [s.mode];
       const pairs = uniquePairs([[s.fast,s.slow],[5,13],[8,21], ...(isWideGrid ? [[12,34],[21,55]] : [])]);
       const pulses = uniqNums([s.pulse, 1.05, 1.35, 1.8, ...(isWideGrid ? [2.2,2.8] : [])]);
       const tps = uniqNums([s.tp, .65, 1.1, 1.8, 2.8, ...(isWideGrid ? [4.2] : [])]);
@@ -2158,6 +2188,19 @@
       const baseOk = Number.isFinite(atrPct) && Number.isFinite(pulse) && Number.isFinite(ind.rsi[i]) &&
         pulse >= p.pulse && atrPct >= p.minAtr && atrPct <= p.maxAtr &&
         trendGap >= minTrend && vwapDist <= maxVwapDist && bodyRatio >= minBody;
+      if(p.mode === 'meanrevert'){
+        if(!baseOk || !Number.isFinite(ind.vwap[i])) return false;
+        if(side === 'LONG'){
+          return c.close < ind.vwap[i] && c.low <= ind.low[i-1] * 1.0004 &&
+            bottomWick >= .22 && buyRatio >= minLongBuyRatio &&
+            ind.rsi[i] >= minRsiLong && ind.rsi[i] <= maxRsiLong &&
+            (c.close > c.open || c.close > prev.close);
+        }
+        return c.close > ind.vwap[i] && c.high >= ind.high[i-1] * .9996 &&
+          topWick >= .22 && buyRatio <= maxShortBuyRatio &&
+          ind.rsi[i] >= minRsiShort && ind.rsi[i] <= maxRsiShort &&
+          (c.close < c.open || c.close < prev.close);
+      }
       if(side === 'LONG'){
         if(!baseOk || !longTrend || buyRatio < minLongBuyRatio || c.close <= c.open || topWick > .48 || ind.rsi[i] < minRsiLong || ind.rsi[i] > maxRsiLong) return false;
         if(p.mode === 'impulse') return pctMove(c, prev) >= .18 && closeNearHigh(c);
@@ -3224,7 +3267,9 @@
     async function findPaperEntries(s){
       const symbols = s.symbols;
       if(state.paper.positions.length >= s.paperMaxOpen) return;
-      if(equityNow() <= state.paper.initial * .98) return;
+      const blockReason = paperRiskBlock(s);
+      state.paper.lastBlockReason = blockReason || '';
+      if(blockReason) return;
       for(const symbol of symbols){
         if(state.paper.positions.length >= s.paperMaxOpen) break;
         if(s.paperNoDuplicate && state.paper.positions.some(p => p.symbol === symbol)) continue;
@@ -3249,6 +3294,42 @@
       }
     }
 
+    function paperRiskBlock(s){
+      const eq = equityNow();
+      const values = state.paper.equity.map(x => x.value);
+      const dd = maxDrawdown([...values, eq]);
+      const todayPnl = realizedPnlSince(startOfDay(Date.now()));
+      const lossStreak = maxRecentLossStreak(8);
+      const liqCount = state.paper.journal.filter(j => j.action === 'CLOSE' && j.reason === 'LIQ').length;
+      if(eq <= state.paper.initial * .98) return 'total_loss_guard';
+      if(dd >= Math.min(6, Math.max(3, s.maxDd * .35))) return 'drawdown_guard';
+      if(todayPnl <= -state.paper.initial * .012) return 'daily_loss_guard';
+      if(lossStreak >= 4) return 'loss_streak_guard';
+      if(liqCount > 0) return 'liquidation_guard';
+      return '';
+    }
+
+    function realizedPnlSince(time){
+      return state.paper.journal
+        .filter(j => j.action === 'CLOSE' && j.time >= time)
+        .reduce((sum,j) => sum + number(j.pnl, 0), 0);
+    }
+
+    function startOfDay(time){
+      const d = new Date(time);
+      d.setHours(0,0,0,0);
+      return d.getTime();
+    }
+
+    function maxRecentLossStreak(limit=Infinity){
+      let streak = 0;
+      for(const row of state.paper.journal.filter(j => j.action === 'CLOSE').slice(0, limit)){
+        if(row.pnl < 0) streak++;
+        else break;
+      }
+      return streak;
+    }
+
     function paperSetupsFor(symbol, s){
       if(s.paperSource === 'selected' && state.selected){
         return [{interval:state.selected.interval, side:state.selected.side, leverage:state.selected.leverage, params:{...state.selected.params}}];
@@ -3260,13 +3341,20 @@
     function openPaper(symbol, side, price, setup, s){
       const leverage = setup.leverage || s.leverages[0] || 1;
       const entryPrice = entryFillPrice(price, side, s);
-      const margin = Math.min(equityNow() * s.marginPct / 100, s.maxPosition / leverage);
-      const order = Math.min(s.maxPosition, margin * leverage);
-      if(margin < 5 || order < 5 || state.paper.cash < margin) return;
       const p = setup.params;
+      const liqAdverse = liquidationAdversePct(leverage);
+      if(Math.max(0, liqAdverse - p.sl) < s.minLiqBuffer) return;
+      const eq = equityNow();
+      const maxRiskCash = eq * .0035;
+      const stopCostPct = Math.max(.05, p.sl + estimatedRoundTripCostPct(s) + fundingCostPct(Date.now(), Date.now() + p.maxHold * 60000, s));
+      const riskOrder = maxRiskCash / (stopCostPct / 100);
+      const rawMargin = Math.min(eq * s.marginPct / 100, s.maxPosition / leverage);
+      const rawOrder = Math.min(s.maxPosition, rawMargin * leverage);
+      const order = Math.min(rawOrder, riskOrder);
+      const margin = order / leverage;
+      if(margin < 5 || order < 5 || state.paper.cash < margin) return;
       const tp = side === 'LONG' ? entryPrice * (1 + p.tp/100) : entryPrice * (1 - p.tp/100);
       const sl = side === 'LONG' ? entryPrice * (1 - p.sl/100) : entryPrice * (1 + p.sl/100);
-      const liqAdverse = liquidationAdversePct(leverage);
       const liq = side === 'LONG' ? entryPrice * (1 - liqAdverse/100) : entryPrice * (1 + liqAdverse/100);
       state.paper.cash = Math.max(0, state.paper.cash - margin);
       state.paper.positions.push({
@@ -3338,12 +3426,13 @@
     function renderReadiness(){
       if(!els.readinessBox || !els.marketQualityBox) return;
       const readiness = state.paper.readiness || localReadiness();
-      const statusText = readiness.status === 'TESTNET_READY' ? '테스트넷 검증 가능' : '실자금 금지';
-      const statusClass = readiness.status === 'TESTNET_READY' ? 'amber' : 'red';
+      const statusText = readiness.status === 'LIVE_READY' ? '소액 실전 검증 가능' : readiness.status === 'TESTNET_READY' ? '테스트넷 검증 가능' : '실자금 금지';
+      const statusClass = readiness.status === 'LIVE_READY' ? 'green' : readiness.status === 'TESTNET_READY' ? 'amber' : 'red';
       const criteria = Array.isArray(readiness.criteria) ? readiness.criteria : [];
       const rows = [
         ['판정', `<span class="${statusClass}">${statusText}</span>`],
         ['준비도 점수', `${readiness.score || 0}% (${readiness.passed || 0}/${readiness.total || criteria.length || 0})`],
+        ['차단 사유', state.paper.lastBlockReason || '-'],
         ['메시지', readiness.message || '장기 모의운용 데이터가 부족합니다.']
       ];
       els.readinessBox.innerHTML = rows.map(([a,b]) => `<div class="line-item"><span>${a}</span><span>${b}</span></div>`).join('') +
@@ -3381,32 +3470,58 @@
       const grossWin = wins.reduce((sum,j) => sum + number(j.pnl, 0), 0);
       const grossLoss = Math.abs(losses.reduce((sum,j) => sum + number(j.pnl, 0), 0));
       const values = state.paper.equity.map(x => x.value);
+      const recent7 = returnSince(Date.now() - 7 * 86400000, eq);
+      const recent14 = returnSince(Date.now() - 14 * 86400000, eq);
+      const avgWin = wins.length ? grossWin / wins.length : 0;
+      const avgLoss = losses.length ? grossLoss / losses.length : 0;
+      const payoff = avgLoss ? avgWin / avgLoss : avgWin ? 99 : 0;
+      const lossStreak = maxRecentLossStreak(12);
       const stats = {
         returnPct:(eq/state.paper.initial-1)*100,
         closedTrades:closed.length,
         profitFactor:grossLoss ? grossWin/grossLoss : grossWin ? 99 : 0,
         maxDrawdownPct:maxDrawdown(values),
         liquidations:closed.filter(j => j.reason === 'LIQ').length,
-        lossGuardHits:0,
+        winRate:closed.length ? wins.length / closed.length * 100 : 0,
+        payoff,
+        lossStreak,
+        recent7,
+        recent14,
         ageDays:values.length > 1 ? (Date.now() - (state.paper.equity[0]?.time || Date.now())) / 86400000 : 0
       };
       const criteria = [
-        {label:'30일 이상 모의운용', value:`${stats.ageDays.toFixed(1)}일`, pass:stats.ageDays >= 30},
-        {label:'80회 이상 종료 거래', value:`${stats.closedTrades}회`, pass:stats.closedTrades >= 80},
-        {label:'순수익 +2% 이상', value:fmtPct(stats.returnPct), pass:stats.returnPct >= 2},
-        {label:'수익 팩터 1.3 이상', value:stats.profitFactor.toFixed(2), pass:stats.profitFactor >= 1.3},
+        {label:'60일 이상 모의운용', value:`${stats.ageDays.toFixed(1)}일`, pass:stats.ageDays >= 60},
+        {label:'200회 이상 종료 거래', value:`${stats.closedTrades}회`, pass:stats.closedTrades >= 200},
+        {label:'누적 순수익 +10% 이상', value:fmtPct(stats.returnPct), pass:stats.returnPct >= 10},
+        {label:'최근 7일 수익 양수', value:fmtPct(stats.recent7), pass:stats.recent7 > 0},
+        {label:'최근 14일 수익 양수', value:fmtPct(stats.recent14), pass:stats.recent14 > 0},
+        {label:'수익 팩터 1.4 이상', value:stats.profitFactor.toFixed(2), pass:stats.profitFactor >= 1.4},
+        {label:'승률 47% 이상', value:`${stats.winRate.toFixed(1)}%`, pass:stats.winRate >= 47},
+        {label:'손익비 0.9 이상', value:stats.payoff.toFixed(2), pass:stats.payoff >= .9},
         {label:'최대 낙폭 5% 이하', value:fmtPct(-stats.maxDrawdownPct).replace('-', ''), pass:stats.maxDrawdownPct <= 5},
+        {label:'최근 연속 손실 3회 이하', value:`${stats.lossStreak}회`, pass:stats.lossStreak <= 3},
         {label:'강제 청산 0회', value:`${stats.liquidations}회`, pass:stats.liquidations === 0}
       ];
       const passed = criteria.filter(x => x.pass).length;
+      const status = passed === criteria.length ? 'LIVE_READY' : passed >= 7 && stats.ageDays >= 30 && stats.closedTrades >= 80 ? 'TESTNET_READY' : 'NOT_READY';
       return {
-        status:'NOT_READY',
+        status,
         score:Math.round(passed / criteria.length * 100),
         passed,
         total:criteria.length,
-        message:'브라우저 모드는 실운용 판정용 데이터가 부족합니다. GitHub 자동 모의투자를 30~60일 이상 확인하세요.',
+        message:status === 'LIVE_READY'
+          ? '모의 기준은 통과했습니다. 그래도 첫 실전은 최소 금액, 낮은 레버리지, 보호 주문 포함으로만 검증하세요.'
+          : status === 'TESTNET_READY'
+            ? '테스트넷 또는 극소액 검증 단계입니다. 아직 실자금 자동운용으로 보기는 이릅니다.'
+            : '실운용 판정용 데이터가 부족합니다. 자동 모의투자를 장기간 누적해야 합니다.',
         criteria
       };
+    }
+
+    function returnSince(time, currentEquity){
+      const rows = state.paper.equity.filter(x => x.time >= time);
+      const start = rows[0]?.value || state.paper.equity[0]?.value || state.paper.initial;
+      return start ? (currentEquity / start - 1) * 100 : 0;
     }
 
     function maxDrawdown(values){
