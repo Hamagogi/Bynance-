@@ -1,3 +1,5 @@
+import { existsSync, readFileSync } from 'node:fs';
+
 const API = 'https://fapi.binance.com/fapi/v1';
 
 const SETTINGS = {
@@ -16,8 +18,8 @@ const SETTINGS = {
   rejectLiq: true,
   mtmDd: true,
   targetWeeklyPct: 10,
-  symbolLimit: Number(process.env.SYMBOL_LIMIT || 24),
-  candleLimit: Number(process.env.CANDLE_LIMIT || 1000),
+  symbolLimit: Number(process.env.SYMBOL_LIMIT ?? 0),
+  candleLimit: Number(process.env.CANDLE_LIMIT || 1500),
   intervals: (process.env.INTERVALS || '3m,5m,15m').split(',').map(x => x.trim()).filter(Boolean),
   leverages: (process.env.LEVERAGES || '2,3,4,5').split(',').map(Number).filter(Boolean)
 };
@@ -72,6 +74,8 @@ async function main(){
   const symbols = await topSymbols(SETTINGS.symbolLimit);
   const paramsList = buildParamGrid();
   const results = [];
+  const bestBySymbol = new Map();
+  const targetBySymbol = new Map();
   let done = 0;
   const total = symbols.length * SETTINGS.intervals.length;
   for(const symbol of symbols){
@@ -82,6 +86,7 @@ async function main(){
       try{
         candles = await klines(symbol, interval, SETTINGS.candleLimit);
       }catch(err){
+        if(isRateLimit(err)) throw err;
         continue;
       }
       if(candles.length < 260) continue;
@@ -97,7 +102,11 @@ async function main(){
             const final = backtest(candles, params, side, leverage, SETTINGS, splitValidation, candles.length, false, ind);
             const all = backtest(candles, params, side, leverage, SETTINGS, 0, candles.length, false, ind);
             const row = decorate(symbol, interval, candles, params, side, leverage, train, test, final, all, SETTINGS);
-            if(row.score > -100) results.push(row);
+            if(row.score > -100) {
+              results.push(row);
+              updateBest(bestBySymbol, symbol, row);
+              if(row.targetPass) updateBest(targetBySymbol, symbol, row);
+            }
           }
         }
       }
@@ -109,12 +118,61 @@ async function main(){
   process.stderr.write('\n');
   results.sort(compareResults);
   const top = results.slice(0, 20);
-  const pass = top.filter(r => r.targetPass);
+  const coverage = symbols.map(symbol => {
+    const target = targetBySymbol.get(symbol) || null;
+    const best = bestBySymbol.get(symbol) || null;
+    return {
+      symbol,
+      pass:!!target,
+      target,
+      best,
+      bestWeekly:best ? best.finalWeeklyPct : null,
+      bestAllWeekly:best ? best.allWeeklyPct : null
+    };
+  });
+  const pass = coverage.filter(r => r.pass).map(r => r.target).sort(compareResults);
+  const missing = coverage.filter(r => !r.pass).map(r => ({
+    symbol:r.symbol,
+    bestWeekly:r.bestWeekly,
+    bestAllWeekly:r.bestAllWeekly,
+    best:r.best ? {
+      interval:r.best.interval,
+      side:r.best.side,
+      leverage:r.best.leverage,
+      params:r.best.params.id,
+      finalWeeklyPct:r.best.finalWeeklyPct,
+      allWeeklyPct:r.best.allWeeklyPct,
+      returnPct:r.best.all.returnPct,
+      maxDd:r.best.all.maxDd,
+      trades:r.best.all.trades,
+      pf:r.best.all.pf,
+      validationPass:r.best.validationPass,
+      finalPass:r.best.finalPass
+    } : null
+  }));
   const report = {
     generatedAt:new Date().toISOString(),
     settings:SETTINGS,
     symbols,
     best:top[0] || null,
+    coverageCount:symbols.length,
+    coveragePassCount:pass.length,
+    coveragePassPct:symbols.length ? pass.length / symbols.length * 100 : 0,
+    allSymbolsTargetPass:pass.length === symbols.length,
+    missingCount:missing.length,
+    missingSymbols:missing,
+    passedSymbols:pass.map(r => ({
+      symbol:r.symbol,
+      interval:r.interval,
+      side:r.side,
+      leverage:r.leverage,
+      params:r.params.id,
+      finalWeeklyPct:r.finalWeeklyPct,
+      allWeeklyPct:r.allWeeklyPct,
+      maxDd:r.all.maxDd,
+      trades:r.all.trades,
+      pf:r.all.pf
+    })),
     targetPassCount:pass.length,
     targetPass:pass.slice(0, 10),
     top
@@ -123,22 +181,52 @@ async function main(){
 }
 
 async function topSymbols(limit){
-  const [info, tickers] = await Promise.all([
-    fetchJson(`${API}/exchangeInfo`),
-    fetchJson(`${API}/ticker/24hr`)
-  ]);
+  if(process.env.SYMBOLS){
+    const rows = process.env.SYMBOLS.split(',').map(x => x.trim()).filter(Boolean);
+    return limit > 0 ? rows.slice(0, limit) : rows;
+  }
+  let info, tickers;
+  try{
+    [info, tickers] = await Promise.all([
+      fetchJson(`${API}/exchangeInfo`),
+      fetchJson(`${API}/ticker/24hr`)
+    ]);
+  }catch(err){
+    const fallback = fallbackSymbols();
+    if(fallback.length){
+      console.error(`[fallback] using ${fallback.length} symbols from previous optimizer output: ${err.message}`);
+      return limit > 0 ? fallback.slice(0, limit) : fallback;
+    }
+    throw err;
+  }
   const tradable = new Set(info.symbols
     .filter(s => s.contractType === 'PERPETUAL' && s.quoteAsset === 'USDT' && s.status === 'TRADING')
     .map(s => s.symbol));
-  return tickers
+  const rows = tickers
     .filter(t => tradable.has(t.symbol) && Number(t.quoteVolume) > 0)
     .sort((a,b) => Number(b.quoteVolume) - Number(a.quoteVolume))
-    .slice(0, limit)
     .map(t => t.symbol);
+  return limit > 0 ? rows.slice(0, limit) : rows;
+}
+
+function updateBest(map, symbol, row){
+  const current = map.get(symbol);
+  if(!current || compareResults(row, current) < 0) map.set(symbol, row);
 }
 
 async function klines(symbol, interval, limit){
-  const rows = await fetchJson(`${API}/klines?symbol=${encodeURIComponent(symbol)}&interval=${interval}&limit=${Math.min(1500, limit)}`);
+  const rows = [];
+  let endTime = '';
+  while(rows.length < limit){
+    const pageLimit = Math.min(1500, limit - rows.length);
+    const page = await fetchJson(`${API}/klines?symbol=${encodeURIComponent(symbol)}&interval=${interval}&limit=${pageLimit}${endTime ? `&endTime=${endTime}` : ''}`);
+    if(!Array.isArray(page) || !page.length) break;
+    rows.unshift(...page);
+    const oldest = Number(page[0][0]);
+    if(!oldest || page.length < pageLimit) break;
+    endTime = String(oldest - 1);
+    await sleep(45);
+  }
   return rows.map(k => ({
     time:Number(k[0]), open:Number(k[1]), high:Number(k[2]), low:Number(k[3]), close:Number(k[4]),
     volume:Number(k[5]), quoteVolume:Number(k[7]), trades:Number(k[8]), takerBuyQuote:Number(k[10])
@@ -146,9 +234,50 @@ async function klines(symbol, interval, limit){
 }
 
 async function fetchJson(url){
-  const res = await fetch(url, {headers:{'accept':'application/json'}});
-  if(!res.ok) throw new Error(`${res.status} ${url}`);
-  return res.json();
+  const attempts = Number(process.env.FETCH_RETRIES || 4);
+  for(let attempt=1; attempt<=attempts; attempt++){
+    const res = await fetch(url, {headers:{'accept':'application/json','user-agent':'Mozilla/5.0 weekly-target-optimizer'}});
+    if(res.ok) return res.json();
+    const retryAfter = Number(res.headers.get('retry-after') || 0);
+    const waitMs = retryAfter ? retryAfter * 1000 : (res.status === 418 || res.status === 429 ? Math.min(120000, attempt * 30000) : 0);
+    if(attempt < attempts && waitMs){
+      console.error(`[rate-limit] ${res.status} waiting ${Math.round(waitMs / 1000)}s for ${url}`);
+      await sleep(waitMs);
+      continue;
+    }
+    const err = new Error(`${res.status} ${url}`);
+    err.status = res.status;
+    throw err;
+  }
+}
+
+function isRateLimit(err){
+  return err && (err.status === 418 || err.status === 429 || /\b(418|429)\b/.test(err.message || ''));
+}
+
+function fallbackSymbols(){
+  const files = [
+    'weekly_optimizer_latest_maker.json',
+    'weekly_optimizer_maker_clean.json',
+    'weekly_optimizer_aggressive_output.json',
+    'weekly_optimizer_output.json'
+  ];
+  for(const file of files){
+    if(!existsSync(file)) continue;
+    try{
+      const json = readJsonFile(file);
+      if(Array.isArray(json.symbols) && json.symbols.length) return json.symbols;
+    }catch{}
+  }
+  return [];
+}
+
+function readJsonFile(file){
+  const buf = readFileSync(file);
+  const hasUtf16Bom = buf.length >= 2 && buf[0] === 0xff && buf[1] === 0xfe;
+  const hasManyNulls = buf.subarray(0, Math.min(buf.length, 80)).some((byte, i) => i % 2 === 1 && byte === 0);
+  const text = buf.toString(hasUtf16Bom || hasManyNulls ? 'utf16le' : 'utf8').replace(/^\uFEFF/, '');
+  return JSON.parse(text);
 }
 
 function indicators(candles, p){
